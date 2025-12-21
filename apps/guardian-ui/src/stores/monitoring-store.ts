@@ -1,248 +1,263 @@
 /**
  * Monitoring Store
  *
- * Zustand state management for monitoring features.
+ * Zustand store for real-time monitoring state.
  *
  * @module stores/monitoring-store
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 // =============================================================================
 // Types
 // =============================================================================
 
-export type MonitoringScenario = 'pet' | 'baby' | 'elderly';
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
-
-export interface MonitoringProfile {
-  id: string;
-  name: string;
-  scenario: MonitoringScenario;
-  motionThreshold: number;
-  audioThreshold: number;
-  alertSpeed: 'slow' | 'normal' | 'fast' | 'immediate';
-  description: string;
-  customPrompt?: string;
-}
-
-export interface Stream {
-  id: string;
-  name: string;
-  profileId: string;
-  status: 'active' | 'paused' | 'disconnected';
-  createdAt: string;
-  lastFrameAt?: string;
-}
+export type AlertSeverity = 'info' | 'warning' | 'urgent' | 'critical';
 
 export interface Alert {
   id: string;
   streamId: string;
-  alertType: 'motion' | 'audio' | 'concern' | 'system';
-  severity: 'info' | 'warning' | 'urgent' | 'critical';
+  type: string;
+  severity: AlertSeverity;
   message: string;
-  escalationLevel: number;
+  timestamp: string;
   acknowledged: boolean;
-  createdAt: string;
+  escalationLevel: number;
 }
 
-export interface MonitoringState {
-  // Connection
-  connectionState: ConnectionState;
-  
-  // Current session
-  currentStreamId: string | null;
-  currentProfile: MonitoringProfile | null;
-  isMonitoring: boolean;
-  
+export interface StreamInfo {
+  id: string;
+  scenario: 'pet' | 'baby' | 'elderly';
+  status: 'connecting' | 'active' | 'paused' | 'disconnected';
+  startedAt: string;
+  motionScore: number;
+  audioLevel: number;
+  lastAnalysisAt: string | null;
+}
+
+interface MonitoringState {
+  // Stream state
+  isStreaming: boolean;
+  streamId: string | null;
+  streamInfo: StreamInfo | null;
+
   // Detection metrics
   motionScore: number;
   audioLevel: number;
-  lastFrameTime: number | null;
-  framesAnalyzed: number;
-  
+  lastFrameTime: number;
+
   // Alerts
   alerts: Alert[];
-  activeAlertId: string | null;
-  
-  // Settings
+  activeAlerts: number;
+  unacknowledgedAlerts: number;
+
+  // Sound settings
   soundEnabled: boolean;
   volume: number;
   notificationsEnabled: boolean;
-  
-  // Available data
-  profiles: MonitoringProfile[];
-  streams: Stream[];
-}
 
-export interface MonitoringActions {
-  // Connection
-  setConnectionState: (state: ConnectionState) => void;
-  
-  // Session
-  startMonitoring: (streamId: string, profile: MonitoringProfile) => void;
-  stopMonitoring: () => void;
-  pauseMonitoring: () => void;
-  resumeMonitoring: () => void;
-  
-  // Metrics
-  updateMetrics: (motion: number, audio: number) => void;
-  incrementFramesAnalyzed: () => void;
-  
-  // Alerts
-  addAlert: (alert: Alert) => void;
+  // Connection state
+  wsConnected: boolean;
+  lastPing: number;
+
+  // Camera state
+  cameraPermission: 'pending' | 'granted' | 'denied';
+  micPermission: 'pending' | 'granted' | 'denied';
+
+  // Actions - Stream
+  startStream: (streamId: string, scenario: 'pet' | 'baby' | 'elderly') => void;
+  stopStream: () => void;
+  updateStreamStatus: (status: StreamInfo['status']) => void;
+
+  // Actions - Metrics
+  updateMotionScore: (score: number) => void;
+  updateAudioLevel: (level: number) => void;
+  recordFrame: () => void;
+
+  // Actions - Alerts
+  addAlert: (alert: Omit<Alert, 'id' | 'timestamp' | 'acknowledged'>) => void;
   acknowledgeAlert: (alertId: string) => void;
   acknowledgeAllAlerts: () => void;
-  setActiveAlert: (alertId: string | null) => void;
-  
-  // Settings
-  setVolume: (volume: number) => void;
+  clearAlerts: () => void;
+
+  // Actions - Settings
   toggleSound: () => void;
+  setVolume: (volume: number) => void;
   toggleNotifications: () => void;
-  
-  // Data
-  setProfiles: (profiles: MonitoringProfile[]) => void;
-  setStreams: (streams: Stream[]) => void;
-  addStream: (stream: Stream) => void;
-  removeStream: (streamId: string) => void;
-  
-  // Reset
-  reset: () => void;
+
+  // Actions - Connection
+  setWsConnected: (connected: boolean) => void;
+  recordPing: () => void;
+
+  // Actions - Permissions
+  setCameraPermission: (status: 'pending' | 'granted' | 'denied') => void;
+  setMicPermission: (status: 'pending' | 'granted' | 'denied') => void;
 }
-
-// =============================================================================
-// Initial State
-// =============================================================================
-
-const initialState: MonitoringState = {
-  connectionState: 'disconnected',
-  currentStreamId: null,
-  currentProfile: null,
-  isMonitoring: false,
-  motionScore: 0,
-  audioLevel: 0,
-  lastFrameTime: null,
-  framesAnalyzed: 0,
-  alerts: [],
-  activeAlertId: null,
-  soundEnabled: true,
-  volume: 50,
-  notificationsEnabled: true,
-  profiles: [],
-  streams: [],
-};
 
 // =============================================================================
 // Store
 // =============================================================================
 
-export const useMonitoringStore = create<MonitoringState & MonitoringActions>()(
-  persist(
-    (set, get) => ({
-      ...initialState,
+export const useMonitoringStore = create<MonitoringState>((set, get) => ({
+  // Initial state
+  isStreaming: false,
+  streamId: null,
+  streamInfo: null,
+  motionScore: 0,
+  audioLevel: 0,
+  lastFrameTime: 0,
+  alerts: [],
+  activeAlerts: 0,
+  unacknowledgedAlerts: 0,
+  soundEnabled: true,
+  volume: 70,
+  notificationsEnabled: true,
+  wsConnected: false,
+  lastPing: 0,
+  cameraPermission: 'pending',
+  micPermission: 'pending',
 
-      // Connection
-      setConnectionState: (connectionState) => set({ connectionState }),
-
-      // Session
-      startMonitoring: (streamId, profile) =>
-        set({
-          currentStreamId: streamId,
-          currentProfile: profile,
-          isMonitoring: true,
-          motionScore: 0,
-          audioLevel: 0,
-          lastFrameTime: null,
-          framesAnalyzed: 0,
-        }),
-
-      stopMonitoring: () =>
-        set({
-          currentStreamId: null,
-          currentProfile: null,
-          isMonitoring: false,
-          motionScore: 0,
-          audioLevel: 0,
-          lastFrameTime: null,
-        }),
-
-      pauseMonitoring: () => set({ isMonitoring: false }),
-
-      resumeMonitoring: () => set({ isMonitoring: true }),
-
-      // Metrics
-      updateMetrics: (motion, audio) =>
-        set({
-          motionScore: motion,
-          audioLevel: audio,
-          lastFrameTime: Date.now(),
-        }),
-
-      incrementFramesAnalyzed: () =>
-        set((state) => ({ framesAnalyzed: state.framesAnalyzed + 1 })),
-
-      // Alerts
-      addAlert: (alert) =>
-        set((state) => ({
-          alerts: [alert, ...state.alerts].slice(0, 100), // Keep last 100
-          activeAlertId: state.activeAlertId || alert.id,
-        })),
-
-      acknowledgeAlert: (alertId) =>
-        set((state) => ({
-          alerts: state.alerts.map((a) =>
-            a.id === alertId ? { ...a, acknowledged: true } : a
-          ),
-          activeAlertId:
-            state.activeAlertId === alertId
-              ? state.alerts.find((a) => a.id !== alertId && !a.acknowledged)?.id || null
-              : state.activeAlertId,
-        })),
-
-      acknowledgeAllAlerts: () =>
-        set((state) => ({
-          alerts: state.alerts.map((a) => ({ ...a, acknowledged: true })),
-          activeAlertId: null,
-        })),
-
-      setActiveAlert: (alertId) => set({ activeAlertId: alertId }),
-
-      // Settings
-      setVolume: (volume) => set({ volume: Math.max(0, Math.min(100, volume)) }),
-
-      toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
-
-      toggleNotifications: () =>
-        set((state) => ({ notificationsEnabled: !state.notificationsEnabled })),
-
-      // Data
-      setProfiles: (profiles) => set({ profiles }),
-
-      setStreams: (streams) => set({ streams }),
-
-      addStream: (stream) =>
-        set((state) => ({
-          streams: [stream, ...state.streams],
-        })),
-
-      removeStream: (streamId) =>
-        set((state) => ({
-          streams: state.streams.filter((s) => s.id !== streamId),
-        })),
-
-      // Reset
-      reset: () => set(initialState),
+  // Actions - Stream
+  startStream: (streamId, scenario) =>
+    set({
+      isStreaming: true,
+      streamId,
+      streamInfo: {
+        id: streamId,
+        scenario,
+        status: 'connecting',
+        startedAt: new Date().toISOString(),
+        motionScore: 0,
+        audioLevel: 0,
+        lastAnalysisAt: null,
+      },
     }),
-    {
-      name: 'safeos-monitoring-store',
-      partialize: (state) => ({
-        // Only persist user preferences, not session data
-        soundEnabled: state.soundEnabled,
-        volume: state.volume,
-        notificationsEnabled: state.notificationsEnabled,
-      }),
-    }
-  )
-);
 
+  stopStream: () =>
+    set({
+      isStreaming: false,
+      streamId: null,
+      streamInfo: null,
+      motionScore: 0,
+      audioLevel: 0,
+    }),
+
+  updateStreamStatus: (status) =>
+    set((state) => ({
+      streamInfo: state.streamInfo
+        ? { ...state.streamInfo, status }
+        : null,
+    })),
+
+  // Actions - Metrics
+  updateMotionScore: (score) =>
+    set((state) => ({
+      motionScore: score,
+      streamInfo: state.streamInfo
+        ? { ...state.streamInfo, motionScore: score }
+        : null,
+    })),
+
+  updateAudioLevel: (level) =>
+    set((state) => ({
+      audioLevel: level,
+      streamInfo: state.streamInfo
+        ? { ...state.streamInfo, audioLevel: level }
+        : null,
+    })),
+
+  recordFrame: () => set({ lastFrameTime: Date.now() }),
+
+  // Actions - Alerts
+  addAlert: (alertData) =>
+    set((state) => {
+      const newAlert: Alert = {
+        ...alertData,
+        id: Math.random().toString(36).slice(2),
+        timestamp: new Date().toISOString(),
+        acknowledged: false,
+        escalationLevel: 0,
+      };
+
+      const alerts = [newAlert, ...state.alerts].slice(0, 100); // Keep last 100
+      const unacknowledgedAlerts = alerts.filter((a) => !a.acknowledged).length;
+
+      return {
+        alerts,
+        activeAlerts: unacknowledgedAlerts,
+        unacknowledgedAlerts,
+      };
+    }),
+
+  acknowledgeAlert: (alertId) =>
+    set((state) => {
+      const alerts = state.alerts.map((a) =>
+        a.id === alertId ? { ...a, acknowledged: true } : a
+      );
+      const unacknowledgedAlerts = alerts.filter((a) => !a.acknowledged).length;
+
+      return {
+        alerts,
+        activeAlerts: unacknowledgedAlerts,
+        unacknowledgedAlerts,
+      };
+    }),
+
+  acknowledgeAllAlerts: () =>
+    set((state) => ({
+      alerts: state.alerts.map((a) => ({ ...a, acknowledged: true })),
+      activeAlerts: 0,
+      unacknowledgedAlerts: 0,
+    })),
+
+  clearAlerts: () =>
+    set({
+      alerts: [],
+      activeAlerts: 0,
+      unacknowledgedAlerts: 0,
+    }),
+
+  // Actions - Settings
+  toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
+
+  setVolume: (volume) => set({ volume: Math.max(0, Math.min(100, volume)) }),
+
+  toggleNotifications: () =>
+    set((state) => ({ notificationsEnabled: !state.notificationsEnabled })),
+
+  // Actions - Connection
+  setWsConnected: (connected) => set({ wsConnected: connected }),
+
+  recordPing: () => set({ lastPing: Date.now() }),
+
+  // Actions - Permissions
+  setCameraPermission: (status) => set({ cameraPermission: status }),
+
+  setMicPermission: (status) => set({ micPermission: status }),
+}));
+
+// =============================================================================
+// Selectors
+// =============================================================================
+
+export const selectIsStreaming = (state: MonitoringState) => state.isStreaming;
+export const selectStreamId = (state: MonitoringState) => state.streamId;
+export const selectMotionScore = (state: MonitoringState) => state.motionScore;
+export const selectAudioLevel = (state: MonitoringState) => state.audioLevel;
+export const selectAlerts = (state: MonitoringState) => state.alerts;
+export const selectActiveAlerts = (state: MonitoringState) => state.activeAlerts;
+export const selectSoundEnabled = (state: MonitoringState) => state.soundEnabled;
+export const selectVolume = (state: MonitoringState) => state.volume;
+
+// =============================================================================
+// Computed Selectors
+// =============================================================================
+
+export const selectCriticalAlerts = (state: MonitoringState) =>
+  state.alerts.filter((a) => a.severity === 'critical' && !a.acknowledged);
+
+export const selectRecentAlerts = (state: MonitoringState) =>
+  state.alerts.slice(0, 10);
+
+export const selectIsHealthy = (state: MonitoringState) =>
+  state.wsConnected && Date.now() - state.lastPing < 30000;

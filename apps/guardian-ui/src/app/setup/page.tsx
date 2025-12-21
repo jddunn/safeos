@@ -1,329 +1,359 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import ProfileSelector from '@/components/ProfileSelector';
+import { useOnboardingStore } from '@/stores/onboarding-store';
 
-type Scenario = 'pet' | 'baby' | 'elderly';
+// =============================================================================
+// Disclaimers (imported from backend - duplicated here for client)
+// =============================================================================
 
-interface OnboardingStep {
-  id: string;
-  title: string;
-  content: string;
-  requiresAcknowledgment: boolean;
-  acknowledgmentText?: string;
-}
+const CRITICAL_DISCLAIMER = `
+⚠️ IMPORTANT SAFETY NOTICE - PLEASE READ CAREFULLY ⚠️
 
-const DISCLAIMERS: Record<Scenario, OnboardingStep[]> = {
-  pet: [
-    {
-      id: 'critical',
-      title: 'Important Safety Notice',
-      content: `SAFEOS IS A SUPPLEMENTARY MONITORING TOOL ONLY.
+SafeOS is a SUPPLEMENTARY monitoring tool provided FREE OF CHARGE by SuperCloud as part of our humanitarian mission.
 
-This service:
-• Does NOT replace in-person care, supervision, or medical attention
-• Does NOT guarantee detection of all events or emergencies
-• May experience delays, outages, or missed detections
-• Uses AI that can make mistakes and miss important events
+This service is NOT intended to replace:
+• Professional medical care or monitoring
+• Parental supervision or childcare
+• Professional elderly care services
+• Veterinary care or pet supervision
+• Emergency services (911)
+• Any form of professional caregiving
 
-You MUST maintain appropriate human supervision at all times.
+LIMITATIONS:
+• AI systems can make mistakes
+• Technology can fail (power outages, network issues)
+• Detection is not 100% accurate
+• There may be delays in alerts
+• This service may be unavailable at times
 
-By using this service, you acknowledge and accept these limitations.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText: 'I understand SafeOS is a supplementary tool only',
-    },
-    {
-      id: 'pet-specific',
-      title: 'Pet Monitoring Disclaimer',
-      content: `PET MONITORING DISCLAIMER
+By using SafeOS, you acknowledge that:
+1. You remain FULLY RESPONSIBLE for the care and safety of those you monitor
+2. This is a supplementary tool, not a primary care solution
+3. You will NOT leave dependents unsupervised based solely on this service
+4. You will maintain appropriate professional care arrangements
+5. You will respond promptly to any concerns, regardless of alerts
 
-SafeOS provides supplementary pet monitoring only.
+USE AT YOUR OWN RISK.
+In case of emergency, ALWAYS call 911.
+`.trim();
 
-• This is NOT a replacement for proper pet care
-• AI may not detect all signs of pet distress or illness
-• Monitoring may be interrupted by technical issues
-• Some pet emergencies may not be visually apparent
+const CONSENT_ITEMS = [
+  {
+    id: 'not_replacement',
+    required: true,
+    text: 'I understand SafeOS is NOT a replacement for professional care, parental supervision, or emergency services.',
+  },
+  {
+    id: 'responsibility',
+    required: true,
+    text: 'I remain fully responsible for the safety and care of those I monitor.',
+  },
+  {
+    id: 'liability',
+    required: true,
+    text: 'I waive all liability claims and accept this service is provided as-is without warranty.',
+  },
+  {
+    id: 'ai_moderation',
+    required: true,
+    text: 'I consent to AI-powered content moderation and understand flagged content may be human-reviewed.',
+  },
+  {
+    id: 'emergency',
+    required: true,
+    text: 'I will call 911 or emergency services for actual emergencies, not rely on this service.',
+  },
+  {
+    id: 'privacy',
+    required: false,
+    text: 'I have read and understand the privacy policy and how my data is handled.',
+  },
+  {
+    id: 'abuse_policy',
+    required: true,
+    text: 'I understand that abuse of this service will result in account termination and potential law enforcement referral.',
+  },
+];
 
-Always ensure your pet has:
-• Adequate food, water, and shelter
-• Regular veterinary care
-• Appropriate supervision for their needs
+const SCENARIOS = [
+  {
+    id: 'pet',
+    icon: '🐾',
+    name: 'Pet Monitoring',
+    description: 'Watch over dogs, cats, and other pets while you\'re away',
+    features: ['Distress detection', 'Activity monitoring', 'Eating/drinking alerts', 'Accident detection'],
+  },
+  {
+    id: 'baby',
+    icon: '👶',
+    name: 'Baby & Toddler',
+    description: 'Monitor infants and young children with cry detection',
+    features: ['Cry detection', 'Movement alerts', 'Sleep monitoring', 'Safety zone warnings'],
+  },
+  {
+    id: 'elderly',
+    icon: '🧓',
+    name: 'Elderly Care',
+    description: 'Support seniors with fall detection and activity monitoring',
+    features: ['Fall detection', 'Inactivity alerts', 'Distress detection', 'Routine monitoring'],
+  },
+];
 
-Contact a veterinarian for any health concerns.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText: 'I understand SafeOS supplements but does not replace proper pet care',
-    },
-  ],
-  baby: [
-    {
-      id: 'critical',
-      title: 'Important Safety Notice',
-      content: `SAFEOS IS A SUPPLEMENTARY MONITORING TOOL ONLY.
-
-This service:
-• Does NOT replace in-person care, supervision, or medical attention
-• Does NOT guarantee detection of all events or emergencies
-• May experience delays, outages, or missed detections
-• Uses AI that can make mistakes and miss important events
-
-You MUST maintain appropriate human supervision at all times.
-
-By using this service, you acknowledge and accept these limitations.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText: 'I understand SafeOS is a supplementary tool only',
-    },
-    {
-      id: 'baby-specific',
-      title: 'Baby Monitoring Disclaimer',
-      content: `BABY/TODDLER MONITORING DISCLAIMER
-
-SafeOS is NOT a replacement for parental supervision.
-
-• This is NOT a medical device
-• This is NOT a certified baby monitor
-• This does NOT replace the need for a parent/caregiver to be present
-• AI detection may fail to identify dangerous situations
-• Network or power failures may interrupt monitoring
-
-NEVER leave a baby or toddler unattended based solely on this service.
-Always follow safe sleep guidelines from pediatric organizations.
-In any emergency, call emergency services immediately.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText:
-        'I understand SafeOS does NOT replace parental supervision and I will maintain appropriate oversight at all times',
-    },
-  ],
-  elderly: [
-    {
-      id: 'critical',
-      title: 'Important Safety Notice',
-      content: `SAFEOS IS A SUPPLEMENTARY MONITORING TOOL ONLY.
-
-This service:
-• Does NOT replace in-person care, supervision, or medical attention
-• Does NOT guarantee detection of all events or emergencies
-• May experience delays, outages, or missed detections
-• Uses AI that can make mistakes and miss important events
-
-You MUST maintain appropriate human supervision at all times.
-
-By using this service, you acknowledge and accept these limitations.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText: 'I understand SafeOS is a supplementary tool only',
-    },
-    {
-      id: 'elderly-specific',
-      title: 'Elderly Care Disclaimer',
-      content: `ELDERLY CARE MONITORING DISCLAIMER
-
-SafeOS is NOT a replacement for professional care.
-
-• This is NOT a medical monitoring device
-• This is NOT a Life Alert or medical emergency system
-• This does NOT replace professional caregivers
-• AI detection may fail to identify falls or medical emergencies
-• There may be significant delays in detection and notification
-
-This service supplements but does not replace:
-• Regular check-ins by family or caregivers
-• Professional medical monitoring systems
-• Emergency response services (911)
-
-If you suspect a medical emergency, call emergency services immediately.`,
-      requiresAcknowledgment: true,
-      acknowledgmentText:
-        'I understand SafeOS does NOT replace professional care and I will ensure appropriate human supervision',
-    },
-  ],
-};
+// =============================================================================
+// Setup Page Component
+// =============================================================================
 
 export default function SetupPage() {
   const router = useRouter();
-  const [step, setStep] = useState<'profile' | 'disclaimers' | 'complete'>('profile');
-  const [selectedProfile, setSelectedProfile] = useState<Scenario | null>(null);
-  const [disclaimerIndex, setDisclaimerIndex] = useState(0);
-  const [acknowledged, setAcknowledged] = useState<Record<string, boolean>>({});
+  const {
+    step,
+    acceptedDisclaimers,
+    selectedScenarios,
+    setStep,
+    acceptDisclaimer,
+    selectScenario,
+    completeOnboarding,
+    isOnboardingComplete,
+  } = useOnboardingStore();
 
-  const currentDisclaimers = selectedProfile ? DISCLAIMERS[selectedProfile] : [];
-  const currentDisclaimer = currentDisclaimers[disclaimerIndex];
-  const allAcknowledged =
-    currentDisclaimers.length > 0 &&
-    currentDisclaimers.every((d) => acknowledged[d.id]);
+  const [scrolledToBottom, setScrolledToBottom] = useState(false);
+  const [allRequiredAccepted, setAllRequiredAccepted] = useState(false);
 
-  const handleProfileSelect = (profile: Scenario) => {
-    setSelectedProfile(profile);
-    setStep('disclaimers');
-    setDisclaimerIndex(0);
-    setAcknowledged({});
-  };
+  // Check if already onboarded
+  useEffect(() => {
+    if (isOnboardingComplete) {
+      router.push('/monitor');
+    }
+  }, [isOnboardingComplete, router]);
 
-  const handleAcknowledge = () => {
-    if (currentDisclaimer) {
-      setAcknowledged((prev) => ({
-        ...prev,
-        [currentDisclaimer.id]: true,
-      }));
+  // Check if all required disclaimers are accepted
+  useEffect(() => {
+    const requiredIds = CONSENT_ITEMS.filter((item) => item.required).map((item) => item.id);
+    const allAccepted = requiredIds.every((id) => acceptedDisclaimers.includes(id));
+    setAllRequiredAccepted(allAccepted);
+  }, [acceptedDisclaimers]);
 
-      if (disclaimerIndex < currentDisclaimers.length - 1) {
-        setDisclaimerIndex((prev) => prev + 1);
-      } else {
-        setStep('complete');
-      }
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    if (atBottom) {
+      setScrolledToBottom(true);
     }
   };
 
   const handleComplete = () => {
-    // Save profile and redirect to monitor
-    localStorage.setItem('safeos_profile', selectedProfile || 'pet');
+    if (selectedScenarios.length === 0) {
+      alert('Please select at least one monitoring scenario');
+      return;
+    }
+    completeOnboarding();
     router.push('/monitor');
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      {/* Progress Indicator */}
-      <div className="flex items-center justify-center gap-4 mb-8">
-        {['Profile', 'Disclaimers', 'Complete'].map((label, index) => {
-          const stepIndex =
-            step === 'profile' ? 0 : step === 'disclaimers' ? 1 : 2;
-          const isActive = index === stepIndex;
-          const isComplete = index < stepIndex;
-
-          return (
-            <div key={label} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  isComplete
-                    ? 'bg-safeos-500 text-white'
-                    : isActive
-                    ? 'bg-white text-black'
-                    : 'bg-white/10 text-white/40'
-                }`}
-              >
-                {isComplete ? '✓' : index + 1}
-              </div>
-              <span
-                className={`text-sm ${
-                  isActive ? 'text-white' : 'text-white/40'
-                }`}
-              >
-                {label}
-              </span>
-              {index < 2 && (
-                <div className="w-8 h-px bg-white/20 mx-2" />
-              )}
-            </div>
-          );
-        })}
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0f0f18] to-[#0a0a0f] text-white">
+      {/* Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 h-1 bg-white/10 z-50">
+        <div
+          className="h-full bg-gradient-to-r from-safeos-500 to-safeos-400 transition-all duration-500"
+          style={{ width: `${(step / 3) * 100}%` }}
+        />
       </div>
 
-      {/* Step Content */}
-      {step === 'profile' && (
-        <div>
-          <h2 className="text-2xl font-bold text-white text-center mb-2">
-            Select Monitoring Profile
-          </h2>
-          <p className="text-white/60 text-center mb-8">
-            Choose the type of monitoring that best fits your needs
+      {/* Header */}
+      <header className="pt-8 pb-4">
+        <div className="container mx-auto px-4 text-center">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-safeos-400 to-cyan-400 bg-clip-text text-transparent">
+            SafeOS Setup
+          </h1>
+          <p className="text-white/60 mt-2">
+            Step {step} of 3
           </p>
-          <ProfileSelector onSelect={handleProfileSelect} selected={selectedProfile} />
         </div>
-      )}
+      </header>
 
-      {step === 'disclaimers' && currentDisclaimer && (
-        <div>
-          <h2 className="text-2xl font-bold text-white text-center mb-2">
-            {currentDisclaimer.title}
-          </h2>
-          <p className="text-white/60 text-center mb-6">
-            Step {disclaimerIndex + 1} of {currentDisclaimers.length}
-          </p>
-
-          <div className="disclaimer-box mb-6">{currentDisclaimer.content}</div>
-
-          {currentDisclaimer.requiresAcknowledgment && (
-            <div className="flex items-start gap-3 mb-6">
-              <input
-                type="checkbox"
-                id="acknowledge"
-                checked={acknowledged[currentDisclaimer.id] || false}
-                onChange={(e) =>
-                  setAcknowledged((prev) => ({
-                    ...prev,
-                    [currentDisclaimer.id]: e.target.checked,
-                  }))
-                }
-                className="mt-1 w-5 h-5 rounded border-white/30 bg-white/10 text-safeos-500 focus:ring-safeos-500"
-              />
-              <label
-                htmlFor="acknowledge"
-                className="text-sm text-white/80 cursor-pointer"
-              >
-                {currentDisclaimer.acknowledgmentText}
-              </label>
+      <main className="container mx-auto px-4 py-8 max-w-2xl">
+        {/* Step 1: Welcome & Disclaimer */}
+        {step === 1 && (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">🛡️</div>
+              <h2 className="text-2xl font-semibold mb-2">Welcome to SafeOS</h2>
+              <p className="text-white/60">
+                A free humanitarian monitoring service by SuperCloud
+              </p>
             </div>
-          )}
 
-          <div className="flex gap-4">
-            <button
-              onClick={() => {
-                if (disclaimerIndex > 0) {
-                  setDisclaimerIndex((prev) => prev - 1);
-                } else {
-                  setStep('profile');
-                }
-              }}
-              className="flex-1 py-3 rounded-lg bg-white/10 hover:bg-white/20 text-white transition"
+            {/* Disclaimer Box */}
+            <div
+              className="bg-white/5 border border-white/10 rounded-xl p-4 h-80 overflow-y-auto font-mono text-sm text-white/70"
+              onScroll={handleScroll}
             >
-              Back
-            </button>
+              <pre className="whitespace-pre-wrap">{CRITICAL_DISCLAIMER}</pre>
+            </div>
+
+            {!scrolledToBottom && (
+              <p className="text-center text-amber-400 text-sm animate-pulse">
+                ↓ Scroll to read the entire disclaimer
+              </p>
+            )}
+
             <button
-              onClick={handleAcknowledge}
-              disabled={
-                currentDisclaimer.requiresAcknowledgment &&
-                !acknowledged[currentDisclaimer.id]
-              }
-              className="flex-1 py-3 rounded-lg bg-safeos-500 hover:bg-safeos-600 text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => setStep(2)}
+              disabled={!scrolledToBottom}
+              className={`w-full py-4 rounded-xl font-semibold text-lg transition ${
+                scrolledToBottom
+                  ? 'bg-safeos-500 hover:bg-safeos-600 text-white'
+                  : 'bg-white/10 text-white/40 cursor-not-allowed'
+              }`}
             >
-              {disclaimerIndex < currentDisclaimers.length - 1
-                ? 'Continue'
-                : 'I Understand'}
+              I Have Read the Disclaimer
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {step === 'complete' && (
-        <div className="text-center">
-          <div className="w-20 h-20 rounded-full bg-safeos-500/20 flex items-center justify-center mx-auto mb-6">
-            <svg
-              className="w-10 h-10 text-safeos-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+        {/* Step 2: Consent Checkboxes */}
+        {step === 2 && (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">✅</div>
+              <h2 className="text-2xl font-semibold mb-2">Confirm Your Understanding</h2>
+              <p className="text-white/60">
+                Please acknowledge each item to continue
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {CONSENT_ITEMS.map((item) => (
+                <label
+                  key={item.id}
+                  className={`flex items-start gap-3 p-4 rounded-xl border transition cursor-pointer ${
+                    acceptedDisclaimers.includes(item.id)
+                      ? 'bg-safeos-500/10 border-safeos-500/30'
+                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={acceptedDisclaimers.includes(item.id)}
+                    onChange={() => acceptDisclaimer(item.id)}
+                    className="mt-1 w-5 h-5 rounded accent-safeos-500"
+                  />
+                  <div>
+                    <span className="text-white/90">{item.text}</span>
+                    {item.required && (
+                      <span className="text-red-400 text-xs ml-1">*</span>
+                    )}
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setStep(1)}
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setStep(3)}
+                disabled={!allRequiredAccepted}
+                className={`flex-1 py-3 rounded-xl font-semibold transition ${
+                  allRequiredAccepted
+                    ? 'bg-safeos-500 hover:bg-safeos-600 text-white'
+                    : 'bg-white/10 text-white/40 cursor-not-allowed'
+                }`}
+              >
+                Continue
+              </button>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Setup Complete!</h2>
-          <p className="text-white/60 mb-8">
-            You&apos;ve acknowledged the important safety disclaimers. You can now start
-            monitoring.
+        )}
+
+        {/* Step 3: Scenario Selection */}
+        {step === 3 && (
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <div className="text-6xl mb-4">🎯</div>
+              <h2 className="text-2xl font-semibold mb-2">Choose Your Scenario</h2>
+              <p className="text-white/60">
+                Select what you'll be monitoring (you can change this later)
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {SCENARIOS.map((scenario) => (
+                <button
+                  key={scenario.id}
+                  onClick={() => selectScenario(scenario.id as 'pet' | 'baby' | 'elderly')}
+                  className={`w-full p-5 rounded-xl border text-left transition ${
+                    selectedScenarios.includes(scenario.id as 'pet' | 'baby' | 'elderly')
+                      ? 'bg-safeos-500/10 border-safeos-500/50 ring-1 ring-safeos-500/30'
+                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="text-4xl">{scenario.icon}</div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-1">{scenario.name}</h3>
+                      <p className="text-white/60 text-sm mb-3">{scenario.description}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {scenario.features.map((feature) => (
+                          <span
+                            key={feature}
+                            className="px-2 py-0.5 bg-white/10 rounded text-xs text-white/70"
+                          >
+                            {feature}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    {selectedScenarios.includes(scenario.id as 'pet' | 'baby' | 'elderly') && (
+                      <div className="text-safeos-400 text-2xl">✓</div>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                onClick={() => setStep(2)}
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleComplete}
+                disabled={selectedScenarios.length === 0}
+                className={`flex-1 py-3 rounded-xl font-semibold transition ${
+                  selectedScenarios.length > 0
+                    ? 'bg-gradient-to-r from-safeos-500 to-cyan-500 hover:from-safeos-600 hover:to-cyan-600 text-white'
+                    : 'bg-white/10 text-white/40 cursor-not-allowed'
+                }`}
+              >
+                Start Monitoring 🚀
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="mt-12 text-center text-white/40 text-sm">
+          <p>
+            SafeOS is a free service by{' '}
+            <a href="https://supercloud.ai" className="text-safeos-400 hover:underline">
+              SuperCloud
+            </a>
           </p>
-          <button
-            onClick={handleComplete}
-            className="px-8 py-3 rounded-lg bg-safeos-500 hover:bg-safeos-600 text-white font-medium transition"
-          >
-            Start Monitoring
-          </button>
+          <p className="mt-1">
+            10% of revenue dedicated to humanity, 10% to wildlife
+          </p>
         </div>
-      )}
+      </main>
     </div>
   );
 }
-

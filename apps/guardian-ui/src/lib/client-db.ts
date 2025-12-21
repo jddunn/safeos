@@ -1,13 +1,119 @@
 /**
  * Client-Side Database
  *
- * Uses @framers/sql-storage-adapter with IndexedDB for browser-native
- * offline-first data persistence.
+ * Uses idb (IndexedDB wrapper) for browser-native offline-first data persistence.
+ * This is a pure browser implementation with no Node.js dependencies.
  *
  * @module lib/client-db
  */
 
-import { createDatabase, type Database, type StorageHooks } from '@framers/sql-storage-adapter';
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+
+// =============================================================================
+// Database Schema
+// =============================================================================
+
+interface SafeOSDB extends DBSchema {
+  local_session: {
+    key: string;
+    value: {
+      id: string;
+      token: string;
+      deviceId: string | null;
+      profile: any;
+      createdAt: string;
+      expiresAt: string;
+      syncedAt: string | null;
+    };
+  };
+  profile_cache: {
+    key: string;
+    value: {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
+      preferences: any;
+      notificationSettings: any;
+      updatedAt: string;
+    };
+  };
+  stream_cache: {
+    key: string;
+    value: {
+      id: string;
+      name: string;
+      scenario: string;
+      status: string;
+      preferences: any;
+      createdAt: string;
+      updatedAt: string;
+      syncedAt: string;
+    };
+    indexes: { 'by-created': string };
+  };
+  alert_cache: {
+    key: string;
+    value: {
+      id: string;
+      streamId: string;
+      severity: string;
+      message: string;
+      description: string;
+      acknowledged: boolean;
+      acknowledgedAt: string | null;
+      createdAt: string;
+      syncedAt: string;
+    };
+    indexes: { 'by-stream': string; 'by-created': string };
+  };
+  frame_cache: {
+    key: string;
+    value: {
+      id: string;
+      streamId: string;
+      frameData: string;
+      motionScore: number;
+      audioLevel: number;
+      analyzed: boolean;
+      createdAt: string;
+    };
+    indexes: { 'by-stream': string; 'by-created': string };
+  };
+  sync_queue: {
+    key: string;
+    value: {
+      id: string;
+      action: string;
+      endpoint: string;
+      method: string;
+      body: any;
+      createdAt: string;
+      retries: number;
+      lastError: string | null;
+    };
+    indexes: { 'by-created': string };
+  };
+  settings_cache: {
+    key: string;
+    value: {
+      key: string;
+      value: any;
+      updatedAt: string;
+    };
+  };
+  consent_log: {
+    key: string;
+    value: {
+      id: string;
+      consentType: string;
+      accepted: boolean;
+      version: string;
+      userAgent: string | null;
+      createdAt: string;
+    };
+    indexes: { 'by-type': string };
+  };
+}
 
 // =============================================================================
 // Configuration
@@ -16,219 +122,68 @@ import { createDatabase, type Database, type StorageHooks } from '@framers/sql-s
 const DB_NAME = 'safeos-guardian';
 const DB_VERSION = 1;
 
-// Cache settings
-const FRAME_BUFFER_MINUTES = 5; // Keep 5 minutes of frames locally
-const MAX_CACHED_ANALYSES = 1000;
+const FRAME_BUFFER_MINUTES = 5;
 const MAX_CACHED_ALERTS = 500;
 
 // =============================================================================
 // Database Instance
 // =============================================================================
 
-let clientDb: Database | null = null;
-let initPromise: Promise<Database> | null = null;
+let dbPromise: Promise<IDBPDatabase<SafeOSDB>> | null = null;
 
-// =============================================================================
-// Lifecycle Hooks
-// =============================================================================
-
-const hooks: StorageHooks = {
-  onAfterWrite: async (context) => {
-    // Auto-cleanup old frames after writes
-    if (context.statement?.includes('frame_cache')) {
-      await cleanupOldFrames();
-    }
-  },
-
-  onAfterQuery: async (context, result) => {
-    // Log slow queries in development
-    if (process.env.NODE_ENV === 'development') {
-      const duration = Date.now() - (context.startTime || Date.now());
-      if (duration > 50) {
-        console.warn(`[ClientDB] Slow query (${duration}ms):`, context.statement?.slice(0, 100));
-      }
-    }
-    return result;
-  },
-};
-
-// =============================================================================
-// Initialization
-// =============================================================================
-
-/**
- * Get or create the client-side database
- */
-export async function getClientDatabase(): Promise<Database> {
-  if (clientDb) {
-    return clientDb;
+function getDB(): Promise<IDBPDatabase<SafeOSDB>> {
+  if (typeof window === 'undefined') {
+    // SSR - return a mock that does nothing
+    return Promise.reject(new Error('IndexedDB not available on server'));
   }
 
-  if (initPromise) {
-    return initPromise;
+  if (!dbPromise) {
+    dbPromise = openDB<SafeOSDB>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        // Create stores
+        if (!db.objectStoreNames.contains('local_session')) {
+          db.createObjectStore('local_session', { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains('profile_cache')) {
+          db.createObjectStore('profile_cache', { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains('stream_cache')) {
+          const streamStore = db.createObjectStore('stream_cache', { keyPath: 'id' });
+          streamStore.createIndex('by-created', 'createdAt');
+        }
+
+        if (!db.objectStoreNames.contains('alert_cache')) {
+          const alertStore = db.createObjectStore('alert_cache', { keyPath: 'id' });
+          alertStore.createIndex('by-stream', 'streamId');
+          alertStore.createIndex('by-created', 'createdAt');
+        }
+
+        if (!db.objectStoreNames.contains('frame_cache')) {
+          const frameStore = db.createObjectStore('frame_cache', { keyPath: 'id' });
+          frameStore.createIndex('by-stream', 'streamId');
+          frameStore.createIndex('by-created', 'createdAt');
+        }
+
+        if (!db.objectStoreNames.contains('sync_queue')) {
+          const syncStore = db.createObjectStore('sync_queue', { keyPath: 'id' });
+          syncStore.createIndex('by-created', 'createdAt');
+        }
+
+        if (!db.objectStoreNames.contains('settings_cache')) {
+          db.createObjectStore('settings_cache', { keyPath: 'key' });
+        }
+
+        if (!db.objectStoreNames.contains('consent_log')) {
+          const consentStore = db.createObjectStore('consent_log', { keyPath: 'id' });
+          consentStore.createIndex('by-type', 'consentType');
+        }
+      },
+    });
   }
 
-  initPromise = (async () => {
-    try {
-      const db = await createDatabase({
-        priority: ['indexeddb', 'sqljs'],
-        indexedDb: {
-          dbName: DB_NAME,
-          storeName: 'safeos_data',
-          autoSave: true,
-          saveIntervalMs: 3000, // Batch writes every 3 seconds
-        },
-        performance: {
-          tier: 'efficient', // Battery-friendly for mobile
-          batchWrites: true,
-        },
-        hooks,
-      });
-
-      await runClientMigrations(db);
-      clientDb = db;
-      return db;
-    } catch (error) {
-      console.error('[ClientDB] Failed to initialize:', error);
-      initPromise = null;
-      throw error;
-    }
-  })();
-
-  return initPromise;
-}
-
-// =============================================================================
-// Migrations
-// =============================================================================
-
-async function runClientMigrations(db: Database): Promise<void> {
-  // Create tables for local-first storage
-
-  // Session storage (for offline support)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS local_session (
-      id TEXT PRIMARY KEY,
-      token TEXT,
-      device_id TEXT,
-      profile_json TEXT,
-      created_at TEXT,
-      expires_at TEXT,
-      synced_at TEXT
-    )
-  `);
-
-  // User profile cache
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS profile_cache (
-      id TEXT PRIMARY KEY,
-      display_name TEXT,
-      avatar_url TEXT,
-      preferences_json TEXT,
-      notification_settings_json TEXT,
-      updated_at TEXT
-    )
-  `);
-
-  // Stream cache
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS stream_cache (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      scenario TEXT,
-      status TEXT,
-      preferences_json TEXT,
-      created_at TEXT,
-      updated_at TEXT,
-      synced_at TEXT
-    )
-  `);
-
-  // Local frame buffer (for offline analysis)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS frame_cache (
-      id TEXT PRIMARY KEY,
-      stream_id TEXT NOT NULL,
-      frame_data TEXT,
-      motion_score REAL,
-      audio_level REAL,
-      analyzed INTEGER DEFAULT 0,
-      created_at TEXT,
-      FOREIGN KEY (stream_id) REFERENCES stream_cache(id)
-    )
-  `);
-
-  // Alert cache
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS alert_cache (
-      id TEXT PRIMARY KEY,
-      stream_id TEXT,
-      severity TEXT,
-      message TEXT,
-      description TEXT,
-      acknowledged INTEGER DEFAULT 0,
-      acknowledged_at TEXT,
-      created_at TEXT,
-      synced_at TEXT
-    )
-  `);
-
-  // Analysis cache
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS analysis_cache (
-      id TEXT PRIMARY KEY,
-      stream_id TEXT,
-      concern_level TEXT,
-      description TEXT,
-      recommendations_json TEXT,
-      source TEXT,
-      created_at TEXT
-    )
-  `);
-
-  // Offline action queue (for sync when back online)
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS sync_queue (
-      id TEXT PRIMARY KEY,
-      action TEXT NOT NULL,
-      endpoint TEXT NOT NULL,
-      method TEXT NOT NULL,
-      body_json TEXT,
-      created_at TEXT,
-      retries INTEGER DEFAULT 0,
-      last_error TEXT
-    )
-  `);
-
-  // Settings cache
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS settings_cache (
-      key TEXT PRIMARY KEY,
-      value_json TEXT,
-      updated_at TEXT
-    )
-  `);
-
-  // Disclaimers and consent tracking
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS consent_log (
-      id TEXT PRIMARY KEY,
-      consent_type TEXT NOT NULL,
-      accepted INTEGER NOT NULL,
-      version TEXT,
-      ip_hash TEXT,
-      user_agent TEXT,
-      created_at TEXT
-    )
-  `);
-
-  // Create indexes
-  await db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_frame_cache_stream ON frame_cache(stream_id);
-    CREATE INDEX IF NOT EXISTS idx_frame_cache_created ON frame_cache(created_at);
-    CREATE INDEX IF NOT EXISTS idx_alert_cache_stream ON alert_cache(stream_id);
-    CREATE INDEX IF NOT EXISTS idx_sync_queue_created ON sync_queue(created_at);
-  `);
+  return dbPromise;
 }
 
 // =============================================================================
@@ -236,41 +191,44 @@ async function runClientMigrations(db: Database): Promise<void> {
 // =============================================================================
 
 async function cleanupOldFrames(): Promise<void> {
-  if (!clientDb) return;
+  try {
+    const db = await getDB();
+    const cutoff = new Date(Date.now() - FRAME_BUFFER_MINUTES * 60 * 1000).toISOString();
 
-  const cutoff = new Date(Date.now() - FRAME_BUFFER_MINUTES * 60 * 1000).toISOString();
+    const tx = db.transaction('frame_cache', 'readwrite');
+    const index = tx.store.index('by-created');
 
-  await clientDb.run(
-    `DELETE FROM frame_cache WHERE created_at < ?`,
-    [cutoff]
-  );
+    let cursor = await index.openCursor(IDBKeyRange.upperBound(cutoff));
+    while (cursor) {
+      await cursor.delete();
+      cursor = await cursor.continue();
+    }
+
+    await tx.done;
+  } catch {
+    // Ignore cleanup errors
+  }
 }
 
 export async function cleanupCaches(): Promise<void> {
-  if (!clientDb) return;
-
-  // Cleanup old frames
   await cleanupOldFrames();
 
-  // Limit analyses
-  await clientDb.run(`
-    DELETE FROM analysis_cache 
-    WHERE id NOT IN (
-      SELECT id FROM analysis_cache 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    )
-  `, [MAX_CACHED_ANALYSES]);
+  try {
+    const db = await getDB();
 
-  // Limit alerts
-  await clientDb.run(`
-    DELETE FROM alert_cache 
-    WHERE id NOT IN (
-      SELECT id FROM alert_cache 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    )
-  `, [MAX_CACHED_ALERTS]);
+    // Limit alerts
+    const alerts = await db.getAllFromIndex('alert_cache', 'by-created');
+    if (alerts.length > MAX_CACHED_ALERTS) {
+      const tx = db.transaction('alert_cache', 'readwrite');
+      const toDelete = alerts.slice(0, alerts.length - MAX_CACHED_ALERTS);
+      for (const alert of toDelete) {
+        await tx.store.delete(alert.id);
+      }
+      await tx.done;
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
 }
 
 // =============================================================================
@@ -288,47 +246,36 @@ export interface LocalSession {
 }
 
 export async function saveLocalSession(session: LocalSession): Promise<void> {
-  const db = await getClientDatabase();
-
-  await db.run(
-    `INSERT OR REPLACE INTO local_session (
-      id, token, device_id, profile_json, created_at, expires_at, synced_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [
-      session.id,
-      session.token,
-      session.deviceId,
-      JSON.stringify(session.profile),
-      session.createdAt,
-      session.expiresAt,
-      session.syncedAt,
-    ]
-  );
+  try {
+    const db = await getDB();
+    await db.put('local_session', session);
+  } catch (error) {
+    console.warn('[ClientDB] Failed to save session:', error);
+  }
 }
 
 export async function getLocalSession(): Promise<LocalSession | null> {
-  const db = await getClientDatabase();
+  try {
+    const db = await getDB();
+    const sessions = await db.getAll('local_session');
 
-  const row = await db.get<any>(
-    `SELECT * FROM local_session WHERE expires_at > datetime('now') ORDER BY created_at DESC LIMIT 1`
-  );
+    const now = new Date().toISOString();
+    const validSession = sessions.find(s => s.expiresAt > now);
 
-  if (!row) return null;
-
-  return {
-    id: row.id,
-    token: row.token,
-    deviceId: row.device_id,
-    profile: JSON.parse(row.profile_json || '{}'),
-    createdAt: row.created_at,
-    expiresAt: row.expires_at,
-    syncedAt: row.synced_at,
-  };
+    return validSession || null;
+  } catch (error) {
+    console.warn('[ClientDB] Failed to get session:', error);
+    return null;
+  }
 }
 
 export async function clearLocalSession(): Promise<void> {
-  const db = await getClientDatabase();
-  await db.run(`DELETE FROM local_session`);
+  try {
+    const db = await getDB();
+    await db.clear('local_session');
+  } catch {
+    // Ignore
+  }
 }
 
 // =============================================================================
@@ -336,41 +283,29 @@ export async function clearLocalSession(): Promise<void> {
 // =============================================================================
 
 export async function cacheProfile(profile: any): Promise<void> {
-  const db = await getClientDatabase();
-
-  await db.run(
-    `INSERT OR REPLACE INTO profile_cache (
-      id, display_name, avatar_url, preferences_json, notification_settings_json, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)`,
-    [
-      profile.id,
-      profile.displayName,
-      profile.avatarUrl,
-      JSON.stringify(profile.preferences || {}),
-      JSON.stringify(profile.notificationSettings || {}),
-      new Date().toISOString(),
-    ]
-  );
+  try {
+    const db = await getDB();
+    await db.put('profile_cache', {
+      id: profile.id,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarUrl,
+      preferences: profile.preferences || {},
+      notificationSettings: profile.notificationSettings || {},
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to cache profile:', error);
+  }
 }
 
 export async function getCachedProfile(id: string): Promise<any | null> {
-  const db = await getClientDatabase();
-
-  const row = await db.get<any>(
-    `SELECT * FROM profile_cache WHERE id = ?`,
-    [id]
-  );
-
-  if (!row) return null;
-
-  return {
-    id: row.id,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-    preferences: JSON.parse(row.preferences_json || '{}'),
-    notificationSettings: JSON.parse(row.notification_settings_json || '{}'),
-    updatedAt: row.updated_at,
-  };
+  try {
+    const db = await getDB();
+    const profile = await db.get('profile_cache', id);
+    return profile || null;
+  } catch {
+    return null;
+  }
 }
 
 // =============================================================================
@@ -378,41 +313,30 @@ export async function getCachedProfile(id: string): Promise<any | null> {
 // =============================================================================
 
 export async function cacheStream(stream: any): Promise<void> {
-  const db = await getClientDatabase();
-
-  await db.run(
-    `INSERT OR REPLACE INTO stream_cache (
-      id, name, scenario, status, preferences_json, created_at, updated_at, synced_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      stream.id,
-      stream.name,
-      stream.scenario,
-      stream.status,
-      JSON.stringify(stream.preferences || {}),
-      stream.createdAt,
-      stream.updatedAt || new Date().toISOString(),
-      new Date().toISOString(),
-    ]
-  );
+  try {
+    const db = await getDB();
+    await db.put('stream_cache', {
+      id: stream.id,
+      name: stream.name,
+      scenario: stream.scenario,
+      status: stream.status,
+      preferences: stream.preferences || {},
+      createdAt: stream.createdAt,
+      updatedAt: stream.updatedAt || new Date().toISOString(),
+      syncedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to cache stream:', error);
+  }
 }
 
 export async function getCachedStreams(): Promise<any[]> {
-  const db = await getClientDatabase();
-
-  const rows = await db.all<any>(
-    `SELECT * FROM stream_cache ORDER BY created_at DESC`
-  );
-
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    scenario: row.scenario,
-    status: row.status,
-    preferences: JSON.parse(row.preferences_json || '{}'),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+  try {
+    const db = await getDB();
+    return await db.getAll('stream_cache');
+  } catch {
+    return [];
+  }
 }
 
 // =============================================================================
@@ -420,51 +344,37 @@ export async function getCachedStreams(): Promise<any[]> {
 // =============================================================================
 
 export async function cacheAlert(alert: any): Promise<void> {
-  const db = await getClientDatabase();
-
-  await db.run(
-    `INSERT OR REPLACE INTO alert_cache (
-      id, stream_id, severity, message, description, acknowledged, acknowledged_at, created_at, synced_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      alert.id,
-      alert.streamId,
-      alert.severity,
-      alert.message,
-      alert.description,
-      alert.acknowledged ? 1 : 0,
-      alert.acknowledgedAt,
-      alert.createdAt,
-      new Date().toISOString(),
-    ]
-  );
+  try {
+    const db = await getDB();
+    await db.put('alert_cache', {
+      id: alert.id,
+      streamId: alert.streamId,
+      severity: alert.severity,
+      message: alert.message,
+      description: alert.description,
+      acknowledged: alert.acknowledged || false,
+      acknowledgedAt: alert.acknowledgedAt,
+      createdAt: alert.createdAt,
+      syncedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to cache alert:', error);
+  }
 }
 
 export async function getCachedAlerts(streamId?: string): Promise<any[]> {
-  const db = await getClientDatabase();
+  try {
+    const db = await getDB();
 
-  let query = `SELECT * FROM alert_cache`;
-  const params: any[] = [];
+    if (streamId) {
+      return await db.getAllFromIndex('alert_cache', 'by-stream', streamId);
+    }
 
-  if (streamId) {
-    query += ` WHERE stream_id = ?`;
-    params.push(streamId);
+    const alerts = await db.getAll('alert_cache');
+    return alerts.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100);
+  } catch {
+    return [];
   }
-
-  query += ` ORDER BY created_at DESC LIMIT 100`;
-
-  const rows = await db.all<any>(query, params);
-
-  return rows.map(row => ({
-    id: row.id,
-    streamId: row.stream_id,
-    severity: row.severity,
-    message: row.message,
-    description: row.description,
-    acknowledged: row.acknowledged === 1,
-    acknowledgedAt: row.acknowledged_at,
-    createdAt: row.created_at,
-  }));
 }
 
 // =============================================================================
@@ -482,57 +392,58 @@ export interface SyncAction {
   lastError: string | null;
 }
 
-export async function queueSyncAction(action: Omit<SyncAction, 'id' | 'createdAt' | 'retries' | 'lastError'>): Promise<void> {
-  const db = await getClientDatabase();
+export async function queueSyncAction(
+  action: Omit<SyncAction, 'id' | 'createdAt' | 'retries' | 'lastError'>
+): Promise<void> {
+  try {
+    const db = await getDB();
+    const id = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  const id = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-  await db.run(
-    `INSERT INTO sync_queue (id, action, endpoint, method, body_json, created_at, retries, last_error)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
+    await db.put('sync_queue', {
       id,
-      action.action,
-      action.endpoint,
-      action.method,
-      JSON.stringify(action.body),
-      new Date().toISOString(),
-      0,
-      null,
-    ]
-  );
+      action: action.action,
+      endpoint: action.endpoint,
+      method: action.method,
+      body: action.body,
+      createdAt: new Date().toISOString(),
+      retries: 0,
+      lastError: null,
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to queue sync action:', error);
+  }
 }
 
 export async function getPendingSyncActions(): Promise<SyncAction[]> {
-  const db = await getClientDatabase();
-
-  const rows = await db.all<any>(
-    `SELECT * FROM sync_queue ORDER BY created_at ASC`
-  );
-
-  return rows.map(row => ({
-    id: row.id,
-    action: row.action,
-    endpoint: row.endpoint,
-    method: row.method,
-    body: JSON.parse(row.body_json || '{}'),
-    createdAt: row.created_at,
-    retries: row.retries,
-    lastError: row.last_error,
-  }));
+  try {
+    const db = await getDB();
+    return await db.getAllFromIndex('sync_queue', 'by-created');
+  } catch {
+    return [];
+  }
 }
 
 export async function removeSyncAction(id: string): Promise<void> {
-  const db = await getClientDatabase();
-  await db.run(`DELETE FROM sync_queue WHERE id = ?`, [id]);
+  try {
+    const db = await getDB();
+    await db.delete('sync_queue', id);
+  } catch {
+    // Ignore
+  }
 }
 
 export async function markSyncActionFailed(id: string, error: string): Promise<void> {
-  const db = await getClientDatabase();
-  await db.run(
-    `UPDATE sync_queue SET retries = retries + 1, last_error = ? WHERE id = ?`,
-    [error, id]
-  );
+  try {
+    const db = await getDB();
+    const action = await db.get('sync_queue', id);
+    if (action) {
+      action.retries++;
+      action.lastError = error;
+      await db.put('sync_queue', action);
+    }
+  } catch {
+    // Ignore
+  }
 }
 
 // =============================================================================
@@ -540,26 +451,26 @@ export async function markSyncActionFailed(id: string, error: string): Promise<v
 // =============================================================================
 
 export async function saveSetting(key: string, value: any): Promise<void> {
-  const db = await getClientDatabase();
-
-  await db.run(
-    `INSERT OR REPLACE INTO settings_cache (key, value_json, updated_at)
-     VALUES (?, ?, ?)`,
-    [key, JSON.stringify(value), new Date().toISOString()]
-  );
+  try {
+    const db = await getDB();
+    await db.put('settings_cache', {
+      key,
+      value,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to save setting:', error);
+  }
 }
 
 export async function getSetting<T>(key: string): Promise<T | null> {
-  const db = await getClientDatabase();
-
-  const row = await db.get<any>(
-    `SELECT value_json FROM settings_cache WHERE key = ?`,
-    [key]
-  );
-
-  if (!row) return null;
-
-  return JSON.parse(row.value_json) as T;
+  try {
+    const db = await getDB();
+    const setting = await db.get('settings_cache', key);
+    return setting?.value as T || null;
+  } catch {
+    return null;
+  }
 }
 
 // =============================================================================
@@ -567,67 +478,58 @@ export async function getSetting<T>(key: string): Promise<T | null> {
 // =============================================================================
 
 export async function logConsent(type: string, accepted: boolean, version: string): Promise<void> {
-  const db = await getClientDatabase();
+  try {
+    const db = await getDB();
+    const id = `consent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  const id = `consent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-  await db.run(
-    `INSERT INTO consent_log (id, consent_type, accepted, version, user_agent, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [
+    await db.put('consent_log', {
       id,
-      type,
-      accepted ? 1 : 0,
+      consentType: type,
+      accepted,
       version,
-      typeof navigator !== 'undefined' ? navigator.userAgent : null,
-      new Date().toISOString(),
-    ]
-  );
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.warn('[ClientDB] Failed to log consent:', error);
+  }
 }
 
 export async function hasAcceptedConsent(type: string): Promise<boolean> {
-  const db = await getClientDatabase();
+  try {
+    const db = await getDB();
+    const consents = await db.getAllFromIndex('consent_log', 'by-type', type);
 
-  const row = await db.get<any>(
-    `SELECT accepted FROM consent_log 
-     WHERE consent_type = ? 
-     ORDER BY created_at DESC 
-     LIMIT 1`,
-    [type]
-  );
+    if (consents.length === 0) return false;
 
-  return row?.accepted === 1;
+    // Get the most recent consent
+    const sorted = consents.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return sorted[0]?.accepted || false;
+  } catch {
+    return false;
+  }
 }
 
 // =============================================================================
-// Export/Import
+// Storage Stats
 // =============================================================================
-
-export async function exportData(): Promise<Uint8Array> {
-  const db = await getClientDatabase();
-  return db.export();
-}
 
 export async function getStorageStats(): Promise<{
   frames: number;
   alerts: number;
-  analyses: number;
   syncPending: number;
 }> {
-  const db = await getClientDatabase();
+  try {
+    const db = await getDB();
 
-  const [frames, alerts, analyses, sync] = await Promise.all([
-    db.get<{ count: number }>(`SELECT COUNT(*) as count FROM frame_cache`),
-    db.get<{ count: number }>(`SELECT COUNT(*) as count FROM alert_cache`),
-    db.get<{ count: number }>(`SELECT COUNT(*) as count FROM analysis_cache`),
-    db.get<{ count: number }>(`SELECT COUNT(*) as count FROM sync_queue`),
-  ]);
+    const [frames, alerts, sync] = await Promise.all([
+      db.count('frame_cache'),
+      db.count('alert_cache'),
+      db.count('sync_queue'),
+    ]);
 
-  return {
-    frames: frames?.count || 0,
-    alerts: alerts?.count || 0,
-    analyses: analyses?.count || 0,
-    syncPending: sync?.count || 0,
-  };
+    return { frames, alerts, syncPending: sync };
+  } catch {
+    return { frames: 0, alerts: 0, syncPending: 0 };
+  }
 }
-

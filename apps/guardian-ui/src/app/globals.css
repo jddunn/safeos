@@ -1,67 +1,159 @@
+/**
+ * SafeOS Guardian - Global Styles
+ *
+ * Industrial, utilitarian design system.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom base styles */
-@layer base {
+/* Import design system */
+@import '../styles/design-system.css';
+
+/* =============================================================================
+   Additional Base Styles
+   ============================================================================= */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Fix for container class conflicts with Tailwind */
+.container {
+  width: 100%;
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 768px) {
+  .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* =============================================================================
+   Form Elements
+   ============================================================================= */
+
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-steel-600);
+  border-radius: 0.25rem;
+  background-color: var(--color-steel-850);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--color-accent-600);
+  border-color: var(--color-accent-600);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.25rem;
+  border-left: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(-45deg) translateY(-1px);
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+/* =============================================================================
+   Selection
+   ============================================================================= */
+
+::selection {
+  background-color: var(--color-accent-600);
+  color: white;
+}
+
+/* =============================================================================
+   Links
+   ============================================================================= */
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* =============================================================================
+   Custom Utility Classes
+   ============================================================================= */
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.animate-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =============================================================================
+   Responsive Typography
+   ============================================================================= */
+
+@media (max-width: 640px) {
+  .text-heading-lg {
+    font-size: 1.5rem;
+  }
+}
+
+/* =============================================================================
+   Print Styles
+   ============================================================================= */
+
+@media print {
   body {
-    @apply bg-slate-900 text-white antialiased;
+    background: white;
+    color: black;
   }
 
-  /* Scrollbar styling */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  .panel {
+    border: 1px solid #ccc;
+    box-shadow: none;
   }
 
-  ::-webkit-scrollbar-track {
-    @apply bg-slate-800;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-slate-600 rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500;
-  }
-}
-
-/* Custom component styles */
-@layer components {
-  .btn-primary {
-    @apply px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg font-medium hover:opacity-90 transition-opacity;
-  }
-
-  .btn-secondary {
-    @apply px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition-colors;
-  }
-
-  .card {
-    @apply bg-slate-800/50 rounded-xl border border-slate-700/50;
-  }
-
-  .input {
-    @apply w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent;
-  }
-}
-
-/* Animation classes */
-@layer utilities {
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient 3s ease infinite;
-  }
-
-  @keyframes gradient {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
+  .btn {
+    display: none;
   }
 }

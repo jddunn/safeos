@@ -2,16 +2,17 @@
  * Root Layout
  *
  * Root layout for the SafeOS Guardian UI.
+ * Industrial, utilitarian design system.
  *
  * @module app/layout
  */
 
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 
 // =============================================================================
-// Fonts
+// Fonts - Industrial Typography System
 // =============================================================================
 
 const inter = Inter({
@@ -24,6 +25,12 @@ const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-space-grotesk',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-jetbrains-mono',
 });
 
 // =============================================================================
@@ -41,6 +48,8 @@ export const metadata: Metadata = {
     'AI monitoring',
     'free monitoring',
     'humanitarian',
+    'local AI',
+    'privacy-first',
   ],
   authors: [{ name: 'SuperCloud' }],
   icons: {
@@ -48,13 +57,19 @@ export const metadata: Metadata = {
     apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.json',
+  openGraph: {
+    title: 'SafeOS Guardian',
+    description: 'Free AI-powered humanitarian monitoring',
+    type: 'website',
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0F172A',
+  themeColor: '#0a0c0f',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 // =============================================================================
@@ -69,20 +84,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spaceGrotesk.variable}`}
+      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen bg-slate-900 font-sans antialiased">
-        {/* Skip to main content */}
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:p-4 focus:bg-emerald-500 focus:text-white"
-        >
-          Skip to main content
-        </a>
-
-        {/* Main content */}
-        <main id="main">{children}</main>
+      <head>
+        {/* Preconnect to font origins for performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
+      <body>
+        {children}
 
         {/* Service Worker Registration */}
         <script

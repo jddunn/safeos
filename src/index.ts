@@ -92,3 +92,32 @@ export {
 // =============================================================================
 
 export const VERSION = '0.1.0';
+
+// =============================================================================
+// Auto-start Server when run directly
+// =============================================================================
+
+// Check if this file is being run directly
+const isMainModule = import.meta.url.endsWith(process.argv[1]?.replace(/\\/g, '/') || '') ||
+                     process.argv[1]?.endsWith('index.ts');
+
+if (isMainModule) {
+  import('./api/server.js').then(({ SafeOSServer }) => {
+    const server = new SafeOSServer();
+    server.start().catch((err: Error) => {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      await server.stop();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      await server.stop();
+      process.exit(0);
+    });
+  });
+}

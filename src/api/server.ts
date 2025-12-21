@@ -20,6 +20,9 @@ import { analysisRoutes } from './routes/analysis';
 import { systemRoutes } from './routes/system';
 import { notificationRoutes } from './routes/notifications';
 import { reviewRoutes } from './routes/review';
+import { authRouter } from './routes/auth';
+import { webhookRouter } from './routes/webhooks';
+import { exportRouter } from './routes/export';
 
 // =============================================================================
 // Types
@@ -105,6 +108,9 @@ export class SafeOSServer {
     this.app.use('/api', systemRoutes);
     this.app.use('/api/notifications', notificationRoutes);
     this.app.use('/api/review', reviewRoutes);
+    this.app.use('/api/auth', authRouter);
+    this.app.use('/api/webhooks', webhookRouter);
+    this.app.use('/api/export', exportRouter);
 
     // Ollama status
     this.app.get('/api/ollama/status', async (_req: Request, res: Response) => {
@@ -427,7 +433,8 @@ export class SafeOSServer {
 // =============================================================================
 
 // Start server if run directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   const server = new SafeOSServer();
   server.start().catch((err) => {
     console.error('Failed to start server:', err);

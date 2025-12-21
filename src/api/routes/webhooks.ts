@@ -1,0 +1,381 @@
+/**
+ * Webhook Routes
+ *
+ * Custom webhook integrations for alerts and events.
+ *
+ * @module api/routes/webhooks
+ */
+
+import { Router } from 'express';
+import { getSafeOSDatabase, generateId, now } from '../../db/index.js';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+interface Webhook {
+  id: string;
+  profileId: string;
+  name: string;
+  url: string;
+  secret: string;
+  events: string[];
+  isActive: boolean;
+  lastTriggered: string | null;
+  failureCount: number;
+  createdAt: string;
+}
+
+interface WebhookPayload {
+  event: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+  signature?: string;
+}
+
+// =============================================================================
+// Router
+// =============================================================================
+
+export const webhookRouter = Router();
+
+// =============================================================================
+// Webhook Management
+// =============================================================================
+
+/**
+ * GET /api/webhooks
+ * List all webhooks for the authenticated user
+ */
+webhookRouter.get('/', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] as string;
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const db = await getSafeOSDatabase();
+
+    // Get profile ID from session
+    const session = await db.get<{ profile_id: string }>(
+      `SELECT profile_id FROM sessions WHERE token = ?`,
+      [token]
+    );
+
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'Invalid session' });
+    }
+
+    const webhooks = await db.all<Webhook>(
+      `SELECT * FROM webhooks WHERE profile_id = ? ORDER BY created_at DESC`,
+      [session.profile_id]
+    );
+
+    res.json({
+      success: true,
+      data: webhooks.map((w) => ({
+        ...w,
+        secret: '********', // Don't expose secrets
+        events: JSON.parse(w.events as unknown as string),
+      })),
+    });
+  } catch (error) {
+    console.error('List webhooks error:', error);
+    res.status(500).json({ success: false, error: 'Failed to list webhooks' });
+  }
+});
+
+/**
+ * POST /api/webhooks
+ * Create a new webhook
+ */
+webhookRouter.post('/', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] as string;
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { name, url, events } = req.body;
+
+    if (!name || !url || !events || !Array.isArray(events)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Name, URL, and events array are required',
+      });
+    }
+
+    // Validate URL
+    try {
+      new URL(url);
+    } catch {
+      return res.status(400).json({ success: false, error: 'Invalid webhook URL' });
+    }
+
+    // Validate events
+    const validEvents = ['alert.created', 'alert.acknowledged', 'stream.started', 'stream.ended', 'analysis.completed', 'review.required'];
+    const invalidEvents = events.filter((e: string) => !validEvents.includes(e));
+    if (invalidEvents.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid events: ${invalidEvents.join(', ')}. Valid: ${validEvents.join(', ')}`,
+      });
+    }
+
+    const db = await getSafeOSDatabase();
+
+    // Get profile ID from session
+    const session = await db.get<{ profile_id: string }>(
+      `SELECT profile_id FROM sessions WHERE token = ?`,
+      [token]
+    );
+
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'Invalid session' });
+    }
+
+    const webhookId = generateId();
+    const secret = generateWebhookSecret();
+
+    await db.run(
+      `INSERT INTO webhooks (
+        id, profile_id, name, url, secret, events, is_active, failure_count, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?)`,
+      [webhookId, session.profile_id, name, url, secret, JSON.stringify(events), now()]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: webhookId,
+        name,
+        url,
+        secret, // Show secret only on creation
+        events,
+        isActive: true,
+      },
+    });
+  } catch (error) {
+    console.error('Create webhook error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create webhook' });
+  }
+});
+
+/**
+ * DELETE /api/webhooks/:id
+ * Delete a webhook
+ */
+webhookRouter.delete('/:id', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] as string;
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const db = await getSafeOSDatabase();
+
+    // Verify ownership
+    const session = await db.get<{ profile_id: string }>(
+      `SELECT profile_id FROM sessions WHERE token = ?`,
+      [token]
+    );
+
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'Invalid session' });
+    }
+
+    const webhook = await db.get<Webhook>(
+      `SELECT * FROM webhooks WHERE id = ? AND profile_id = ?`,
+      [id, session.profile_id]
+    );
+
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook not found' });
+    }
+
+    await db.run(`DELETE FROM webhooks WHERE id = ?`, [id]);
+
+    res.json({ success: true, message: 'Webhook deleted' });
+  } catch (error) {
+    console.error('Delete webhook error:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete webhook' });
+  }
+});
+
+/**
+ * POST /api/webhooks/:id/test
+ * Send a test payload to a webhook
+ */
+webhookRouter.post('/:id/test', async (req, res) => {
+  try {
+    const token = req.headers['x-session-token'] as string;
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
+
+    const { id } = req.params;
+    const db = await getSafeOSDatabase();
+
+    // Verify ownership
+    const session = await db.get<{ profile_id: string }>(
+      `SELECT profile_id FROM sessions WHERE token = ?`,
+      [token]
+    );
+
+    if (!session) {
+      return res.status(401).json({ success: false, error: 'Invalid session' });
+    }
+
+    const webhook = await db.get<any>(
+      `SELECT * FROM webhooks WHERE id = ? AND profile_id = ?`,
+      [id, session.profile_id]
+    );
+
+    if (!webhook) {
+      return res.status(404).json({ success: false, error: 'Webhook not found' });
+    }
+
+    // Send test payload
+    const testPayload: WebhookPayload = {
+      event: 'test',
+      timestamp: now(),
+      data: {
+        message: 'This is a test webhook from SafeOS Guardian',
+        webhookId: id,
+      },
+    };
+
+    const result = await sendWebhook(webhook.url, webhook.secret, testPayload);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Test webhook sent successfully',
+        statusCode: result.statusCode,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: `Webhook failed: ${result.error}`,
+        statusCode: result.statusCode,
+      });
+    }
+  } catch (error) {
+    console.error('Test webhook error:', error);
+    res.status(500).json({ success: false, error: 'Failed to test webhook' });
+  }
+});
+
+// =============================================================================
+// Webhook Delivery
+// =============================================================================
+
+/**
+ * Send a webhook payload
+ */
+export async function sendWebhook(
+  url: string,
+  secret: string,
+  payload: WebhookPayload
+): Promise<{ success: boolean; statusCode?: number; error?: string }> {
+  try {
+    const signature = generateSignature(JSON.stringify(payload), secret);
+    payload.signature = signature;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-SafeOS-Signature': signature,
+        'X-SafeOS-Event': payload.event,
+        'User-Agent': 'SafeOS-Guardian/1.0',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return {
+      success: response.ok,
+      statusCode: response.status,
+      error: response.ok ? undefined : `HTTP ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Trigger webhooks for an event
+ */
+export async function triggerWebhooks(
+  profileId: string,
+  event: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const db = await getSafeOSDatabase();
+
+  const webhooks = await db.all<any>(
+    `SELECT * FROM webhooks WHERE profile_id = ? AND is_active = 1`,
+    [profileId]
+  );
+
+  const payload: WebhookPayload = {
+    event,
+    timestamp: now(),
+    data,
+  };
+
+  for (const webhook of webhooks) {
+    const events = JSON.parse(webhook.events);
+    if (!events.includes(event)) continue;
+
+    const result = await sendWebhook(webhook.url, webhook.secret, payload);
+
+    // Update webhook status
+    if (result.success) {
+      await db.run(
+        `UPDATE webhooks SET last_triggered = ?, failure_count = 0 WHERE id = ?`,
+        [now(), webhook.id]
+      );
+    } else {
+      await db.run(
+        `UPDATE webhooks SET failure_count = failure_count + 1 WHERE id = ?`,
+        [webhook.id]
+      );
+
+      // Disable after 10 consecutive failures
+      if (webhook.failure_count >= 9) {
+        await db.run(
+          `UPDATE webhooks SET is_active = 0 WHERE id = ?`,
+          [webhook.id]
+        );
+      }
+    }
+  }
+}
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+function generateWebhookSecret(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let secret = 'whsec_';
+  for (let i = 0; i < 32; i++) {
+    secret += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return secret;
+}
+
+function generateSignature(payload: string, secret: string): string {
+  // Simple HMAC-like signature (in production, use crypto.createHmac)
+  const hash = payload.split('').reduce((acc, char) => {
+    return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
+  }, 0);
+  return `sha256=${Math.abs(hash).toString(16)}${secret.slice(-8)}`;
+}
+
+

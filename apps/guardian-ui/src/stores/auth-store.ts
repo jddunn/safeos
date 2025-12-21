@@ -53,11 +53,13 @@ interface AuthState {
   isInitialized: boolean;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isLoggedIn: boolean; // Alias for isAuthenticated
   isGuest: boolean;
   sessionToken: string | null;
   sessionId: string | null;
   deviceId: string | null;
   profile: UserProfile | null;
+  user: { id: string; displayName: string; preferences: UserPreferences } | null; // Simple user object
   expiresAt: string | null;
 
   // Actions
@@ -69,6 +71,10 @@ interface AuthState {
   updateNotificationSettings: (settings: Partial<NotificationSettings>) => Promise<void>;
   logout: () => Promise<void>;
   setDeviceId: (deviceId: string) => void;
+  
+  // Convenience aliases
+  login: (user: { id: string; displayName: string; preferences: UserPreferences }) => void;
+  startGuestSession: (user: { id: string; displayName: string; preferences: UserPreferences }) => void;
 }
 
 // =============================================================================
@@ -108,11 +114,13 @@ export const useAuthStore = create<AuthState>()(
       isInitialized: false,
       isLoading: false,
       isAuthenticated: false,
+      isLoggedIn: false,
       isGuest: true,
       sessionToken: null,
       sessionId: null,
       deviceId: null,
       profile: null,
+      user: null,
       expiresAt: null,
 
       // Initialize from local storage
@@ -383,6 +391,58 @@ export const useAuthStore = create<AuthState>()(
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem('safeos_device_id', deviceId);
         }
+      },
+
+      // Convenience: Login with user data
+      login: (user) => {
+        set({
+          isAuthenticated: true,
+          isLoggedIn: true,
+          isGuest: false,
+          user,
+          profile: {
+            id: user.id,
+            displayName: user.displayName,
+            avatarUrl: null,
+            preferences: user.preferences,
+            notificationSettings: {
+              browserPush: true,
+              sms: false,
+              telegram: false,
+              emailDigest: false,
+              quietHoursStart: null,
+              quietHoursEnd: null,
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      },
+
+      // Convenience: Start guest session
+      startGuestSession: (user) => {
+        set({
+          isAuthenticated: true,
+          isLoggedIn: true,
+          isGuest: true,
+          user,
+          profile: {
+            id: user.id,
+            displayName: user.displayName,
+            avatarUrl: null,
+            preferences: user.preferences,
+            notificationSettings: {
+              browserPush: true,
+              sms: false,
+              telegram: false,
+              emailDigest: false,
+              quietHoursStart: null,
+              quietHoursEnd: null,
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        });
       },
     }),
     {

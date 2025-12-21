@@ -1,217 +1,467 @@
-'use client';
-
 /**
  * Settings Page
  *
- * User settings and configuration.
+ * User preferences and notification settings.
  *
  * @module app/settings/page
  */
 
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useMonitoringStore } from '../../stores/monitoring-store';
-import { useOnboardingStore } from '../../stores/onboarding-store';
+import { useAuthStore } from '../../stores/auth-store';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+interface SettingsSection {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+}
 
 // =============================================================================
 // Component
 // =============================================================================
 
 export default function SettingsPage() {
-  const {
-    motionSensitivity,
-    audioSensitivity,
-    setMotionSensitivity,
-    setAudioSensitivity,
-    reset: resetMonitoring,
-  } = useMonitoringStore();
+  const { user, isLoggedIn, updateProfile } = useAuthStore();
+  const [activeSection, setActiveSection] = useState('general');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const { resetOnboarding } = useOnboardingStore();
+  // Form state
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [motionSensitivity, setMotionSensitivity] = useState(50);
+  const [audioSensitivity, setAudioSensitivity] = useState(50);
+  const [alertVolume, setAlertVolume] = useState(70);
+  const [theme, setTheme] = useState<'dark' | 'light' | 'auto'>('dark');
 
-  const [saved, setSaved] = useState(false);
+  // Notification settings
+  const [browserPush, setBrowserPush] = useState(true);
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+  const [quietHoursStart, setQuietHoursStart] = useState('22:00');
+  const [quietHoursEnd, setQuietHoursEnd] = useState('07:00');
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+  useEffect(() => {
+    if (user?.preferences) {
+      setMotionSensitivity((user.preferences.motionSensitivity || 0.5) * 100);
+      setAudioSensitivity((user.preferences.audioSensitivity || 0.5) * 100);
+      setAlertVolume((user.preferences.alertVolume || 0.7) * 100);
+      setTheme(user.preferences.theme || 'dark');
+    }
+  }, [user]);
 
-  const handleReset = () => {
-    if (confirm('This will reset all settings and require you to go through setup again. Continue?')) {
-      resetMonitoring();
-      resetOnboarding();
-      window.location.href = '/';
+  const sections: SettingsSection[] = [
+    {
+      id: 'general',
+      title: 'General',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'detection',
+      title: 'Detection',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+      ),
+    },
+    {
+      id: 'alerts',
+      title: 'Alerts',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'privacy',
+      title: 'Privacy',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      ),
+    },
+  ];
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const token = localStorage.getItem('safeos_session_token');
+
+      const response = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': token || '',
+        },
+        body: JSON.stringify({
+          displayName,
+          preferences: {
+            motionSensitivity: motionSensitivity / 100,
+            audioSensitivity: audioSensitivity / 100,
+            alertVolume: alertVolume / 100,
+            theme,
+          },
+          notificationSettings: {
+            browserPush,
+            sms: smsEnabled,
+            telegram: telegramEnabled,
+            quietHoursStart: quietHoursEnabled ? quietHoursStart : null,
+            quietHoursEnd: quietHoursEnabled ? quietHoursEnd : null,
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        updateProfile(data.data);
+        setSaveMessage({ type: 'success', text: 'Settings saved successfully!' });
+      } else {
+        setSaveMessage({ type: 'error', text: data.error || 'Failed to save settings' });
+      }
+    } catch {
+      setSaveMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveMessage(null), 3000);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="text-2xl hover:scale-110 transition-transform">
-                🛡️
-              </Link>
-              <h1 className="text-xl font-bold text-white">Settings</h1>
-            </div>
-            <Link
-              href="/"
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              Back
+      <header className="p-4 sm:p-6 border-b border-slate-700/50">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
             </Link>
+            <h1 className="text-xl font-bold text-white">Settings</h1>
           </div>
+
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {isSaving ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Save Changes
+              </>
+            )}
+          </button>
         </div>
       </header>
 
-      {/* Content */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Sensitivity Settings */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">
-            Detection Sensitivity
-          </h2>
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6 space-y-6">
-            {/* Motion Sensitivity */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="font-medium text-white">Motion Sensitivity</label>
-                <span className="text-gray-400">{motionSensitivity}%</span>
-              </div>
-              <input
-                type="range"
-                min={10}
-                max={90}
-                value={motionSensitivity}
-                onChange={(e) => setMotionSensitivity(Number(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Less Sensitive</span>
-                <span>More Sensitive</span>
-              </div>
-            </div>
+      {/* Save Message */}
+      {saveMessage && (
+        <div className={`
+          fixed top-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50
+          ${saveMessage.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}
+          text-white
+        `}>
+          {saveMessage.text}
+        </div>
+      )}
 
-            {/* Audio Sensitivity */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="font-medium text-white">Audio Sensitivity</label>
-                <span className="text-gray-400">{audioSensitivity}%</span>
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto p-4 sm:p-6">
+        <div className="flex flex-col md:flex-row gap-6">
+          {/* Sidebar */}
+          <nav className="md:w-56 flex-shrink-0">
+            <ul className="space-y-1">
+              {sections.map((section) => (
+                <li key={section.id}>
+                  <button
+                    onClick={() => setActiveSection(section.id)}
+                    className={`
+                      w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                      ${activeSection === section.id
+                        ? 'bg-slate-700 text-white'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }
+                    `}
+                  >
+                    {section.icon}
+                    <span>{section.title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Content */}
+          <div className="flex-1 bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
+            {activeSection === 'general' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-white">General Settings</h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full max-w-md px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Theme
+                  </label>
+                  <select
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value as 'dark' | 'light' | 'auto')}
+                    className="w-full max-w-md px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                    <option value="auto">System</option>
+                  </select>
+                </div>
               </div>
-              <input
-                type="range"
-                min={10}
-                max={90}
-                value={audioSensitivity}
-                onChange={(e) => setAudioSensitivity(Number(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Less Sensitive</span>
-                <span>More Sensitive</span>
+            )}
+
+            {activeSection === 'detection' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-white">Detection Settings</h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Motion Sensitivity: {motionSensitivity}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={motionSensitivity}
+                    onChange={(e) => setMotionSensitivity(Number(e.target.value))}
+                    className="w-full max-w-md h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Lower = more sensitive. Higher = less false alerts.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Audio Sensitivity: {audioSensitivity}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={audioSensitivity}
+                    onChange={(e) => setAudioSensitivity(Number(e.target.value))}
+                    className="w-full max-w-md h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Adjust for background noise levels.
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
+
+            {activeSection === 'notifications' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-white">Notification Settings</h2>
+
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={browserPush}
+                      onChange={(e) => setBrowserPush(e.target.checked)}
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <p className="text-white">Browser Push Notifications</p>
+                      <p className="text-xs text-slate-500">Get alerts even when the tab is in background</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smsEnabled}
+                      onChange={(e) => setSmsEnabled(e.target.checked)}
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <p className="text-white">SMS Notifications</p>
+                      <p className="text-xs text-slate-500">Receive critical alerts via text message</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={telegramEnabled}
+                      onChange={(e) => setTelegramEnabled(e.target.checked)}
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <p className="text-white">Telegram Notifications</p>
+                      <p className="text-xs text-slate-500">Get alerts via Telegram bot</p>
+                    </div>
+                  </label>
+                </div>
+
+                <hr className="border-slate-700" />
+
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer mb-4">
+                    <input
+                      type="checkbox"
+                      checked={quietHoursEnabled}
+                      onChange={(e) => setQuietHoursEnabled(e.target.checked)}
+                      className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <div>
+                      <p className="text-white">Quiet Hours</p>
+                      <p className="text-xs text-slate-500">Mute non-critical alerts during set times</p>
+                    </div>
+                  </label>
+
+                  {quietHoursEnabled && (
+                    <div className="flex items-center gap-4 ml-8">
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">Start</label>
+                        <input
+                          type="time"
+                          value={quietHoursStart}
+                          onChange={(e) => setQuietHoursStart(e.target.value)}
+                          className="px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                        />
+                      </div>
+                      <span className="text-slate-500 mt-5">to</span>
+                      <div>
+                        <label className="block text-xs text-slate-400 mb-1">End</label>
+                        <input
+                          type="time"
+                          value={quietHoursEnd}
+                          onChange={(e) => setQuietHoursEnd(e.target.value)}
+                          className="px-3 py-2 bg-slate-900/50 border border-slate-600 rounded-lg text-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'alerts' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-white">Alert Settings</h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Alert Volume: {alertVolume}%
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={alertVolume}
+                    onChange={(e) => setAlertVolume(Number(e.target.value))}
+                    className="w-full max-w-md h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Initial volume for alerts (escalates over time if unacknowledged)
+                  </p>
+                </div>
+
+                <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                  <h3 className="text-amber-400 font-medium mb-2">Alert Escalation</h3>
+                  <p className="text-sm text-slate-300">
+                    Unacknowledged alerts automatically increase in volume over time:
+                  </p>
+                  <ul className="text-sm text-slate-400 mt-2 space-y-1">
+                    <li>• Level 1: Gentle chime (your set volume)</li>
+                    <li>• Level 2: Repeated tone (+50% volume)</li>
+                    <li>• Level 3: Urgent alarm (max volume)</li>
+                    <li>• Level 4: Push notifications sent</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'privacy' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-semibold text-white">Privacy & Data</h2>
+
+                <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+                  <h3 className="text-white font-medium mb-2">🔒 Your Privacy Matters</h3>
+                  <ul className="text-sm text-slate-300 space-y-2">
+                    <li>• All video processing happens locally in your browser</li>
+                    <li>• Frames are only kept for 5-10 minutes (rolling buffer)</li>
+                    <li>• No video data is stored on servers unless flagged</li>
+                    <li>• Flagged content is anonymized before human review</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-white font-medium mb-2">Data Storage</h3>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Your preferences and session data are stored locally in your browser using IndexedDB.
+                  </p>
+                  <button
+                    onClick={() => {
+                      if (confirm('This will delete all local data. Are you sure?')) {
+                        localStorage.clear();
+                        indexedDB.deleteDatabase('safeos-guardian');
+                        window.location.reload();
+                      }
+                    }}
+                    className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-lg transition-colors"
+                  >
+                    Clear All Local Data
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </section>
-
-        {/* Notification Settings */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Notifications</h2>
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6 space-y-4">
-            <SettingToggle
-              label="Browser Push Notifications"
-              description="Receive alerts in your browser"
-              defaultChecked={true}
-            />
-            <SettingToggle
-              label="Sound Alerts"
-              description="Play sound when alerts occur"
-              defaultChecked={true}
-            />
-            <SettingToggle
-              label="Desktop Notifications"
-              description="Show system notifications"
-              defaultChecked={false}
-            />
-          </div>
-        </section>
-
-        {/* Privacy Settings */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-white mb-4">Privacy</h2>
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700 p-6 space-y-4">
-            <SettingToggle
-              label="Local Processing Only"
-              description="Prefer local AI when available"
-              defaultChecked={true}
-            />
-            <SettingToggle
-              label="Auto-Delete Footage"
-              description="Automatically delete footage after 10 minutes"
-              defaultChecked={true}
-            />
-            <SettingToggle
-              label="Anonymize for Cloud"
-              description="Blur faces before cloud processing"
-              defaultChecked={true}
-            />
-          </div>
-        </section>
-
-        {/* Actions */}
-        <section className="flex flex-wrap gap-4">
-          <button
-            onClick={handleSave}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-          >
-            {saved ? '✓ Saved' : 'Save Settings'}
-          </button>
-          <button
-            onClick={handleReset}
-            className="px-6 py-3 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 font-semibold rounded-lg transition-colors"
-          >
-            Reset All Settings
-          </button>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-// =============================================================================
-// Sub-Components
-// =============================================================================
-
-function SettingToggle({
-  label,
-  description,
-  defaultChecked,
-}: {
-  label: string;
-  description: string;
-  defaultChecked: boolean;
-}) {
-  const [enabled, setEnabled] = useState(defaultChecked);
-
-  return (
-    <div className="flex items-center justify-between">
-      <div>
-        <div className="font-medium text-white">{label}</div>
-        <div className="text-sm text-gray-400">{description}</div>
+        </div>
       </div>
-      <button
-        onClick={() => setEnabled(!enabled)}
-        className={`w-12 h-6 rounded-full transition-colors ${
-          enabled ? 'bg-blue-500' : 'bg-gray-600'
-        }`}
-      >
-        <div
-          className={`w-5 h-5 bg-white rounded-full transition-transform ${
-            enabled ? 'translate-x-6' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
     </div>
   );
 }

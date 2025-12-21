@@ -80,6 +80,15 @@ export interface LostFoundSettings {
   // Display
   showConfidenceOverlay: boolean;
   highlightMatchRegion: boolean;
+  
+  // Custom media playback (new)
+  customMediaEnabled: boolean;
+  customMediaPlaybackMode: 'count' | 'loop' | 'timer';
+  customMediaRepeatCount: number;
+  customMediaTimerMs: number;
+  customMediaImageIntervalMs: number;
+  customMediaTTSEnabled: boolean;
+  customMediaTTSMessages: string[];
 }
 
 export interface LostFoundState {
@@ -164,6 +173,15 @@ export const DEFAULT_SETTINGS: LostFoundSettings = {
   // Display
   showConfidenceOverlay: true,
   highlightMatchRegion: true,
+  
+  // Custom media playback
+  customMediaEnabled: false,
+  customMediaPlaybackMode: 'count',
+  customMediaRepeatCount: 3,
+  customMediaTimerMs: 60000,
+  customMediaImageIntervalMs: 3000,
+  customMediaTTSEnabled: true,
+  customMediaTTSMessages: ['Attention! Your lost subject has been detected.'],
 };
 
 // =============================================================================

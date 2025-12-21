@@ -176,6 +176,42 @@ interface SafeOSDB extends DBSchema {
     };
     indexes: { 'by-timestamp': number; 'by-personCount': number };
   };
+  // Custom media for Lost & Found alerts
+  custom_media: {
+    key: string;
+    value: {
+      id: string;
+      subjectId: string; // Links to subject_profile
+      type: 'image' | 'audio';
+      name: string;
+      data: string; // base64
+      mimeType: string;
+      width?: number;
+      height?: number;
+      durationMs?: number;
+      uploadedAt: number;
+      order: number;
+    };
+    indexes: { 'by-subject': string; 'by-type': string; 'by-order': number };
+  };
+  // Animal detection history
+  animal_detection: {
+    key: string;
+    value: {
+      id: string;
+      type: string;
+      displayName: string;
+      sizeCategory: 'small' | 'medium' | 'large';
+      dangerLevel: 'none' | 'low' | 'medium' | 'high' | 'extreme';
+      confidence: number;
+      bbox: [number, number, number, number];
+      timestamp: number;
+      frameData?: string;
+      acknowledged: boolean;
+      notes: string;
+    };
+    indexes: { 'by-timestamp': number; 'by-type': string; 'by-danger': string };
+  };
 }
 
 // =============================================================================
@@ -183,7 +219,7 @@ interface SafeOSDB extends DBSchema {
 // =============================================================================
 
 const DB_NAME = 'safeos-guardian';
-const DB_VERSION = 3; // Bumped for Security/Intrusion detection stores
+const DB_VERSION = 4; // Bumped for Custom Media and Animal Detection stores
 
 const FRAME_BUFFER_MINUTES = 5;
 const MAX_CACHED_ALERTS = 500;
@@ -263,6 +299,21 @@ function getDB(): Promise<IDBPDatabase<SafeOSDB>> {
           const intrusionStore = db.createObjectStore('intrusion_frame', { keyPath: 'id' });
           intrusionStore.createIndex('by-timestamp', 'timestamp');
           intrusionStore.createIndex('by-personCount', 'personCount');
+        }
+        
+        // Version 4: Custom media and animal detection
+        if (!db.objectStoreNames.contains('custom_media')) {
+          const mediaStore = db.createObjectStore('custom_media', { keyPath: 'id' });
+          mediaStore.createIndex('by-subject', 'subjectId');
+          mediaStore.createIndex('by-type', 'type');
+          mediaStore.createIndex('by-order', 'order');
+        }
+        
+        if (!db.objectStoreNames.contains('animal_detection')) {
+          const animalStore = db.createObjectStore('animal_detection', { keyPath: 'id' });
+          animalStore.createIndex('by-timestamp', 'timestamp');
+          animalStore.createIndex('by-type', 'type');
+          animalStore.createIndex('by-danger', 'dangerLevel');
         }
       },
     });
@@ -1261,6 +1312,328 @@ export async function getIntrusionStats(): Promise<{
       last24Hours: 0,
       last7Days: 0,
       averagePersonCount: 0,
+    };
+  }
+}
+
+// =============================================================================
+// Custom Media CRUD
+// =============================================================================
+
+export type CustomMediaDB = SafeOSDB['custom_media']['value'];
+
+const MAX_CUSTOM_MEDIA = 100;
+
+export async function saveCustomMedia(media: CustomMediaDB): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put('custom_media', media);
+    await cleanupExcessCustomMedia(media.subjectId);
+  } catch (error) {
+    console.warn('[ClientDB] Failed to save custom media:', error);
+  }
+}
+
+export async function getCustomMedia(id: string): Promise<CustomMediaDB | null> {
+  try {
+    const db = await getDB();
+    const media = await db.get('custom_media', id);
+    return media || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCustomMediaBySubject(subjectId: string): Promise<CustomMediaDB[]> {
+  try {
+    const db = await getDB();
+    const media = await db.getAllFromIndex('custom_media', 'by-subject', subjectId);
+    return media.sort((a, b) => a.order - b.order);
+  } catch {
+    return [];
+  }
+}
+
+export async function getCustomMediaByType(
+  subjectId: string,
+  type: 'image' | 'audio'
+): Promise<CustomMediaDB[]> {
+  try {
+    const db = await getDB();
+    const allMedia = await db.getAllFromIndex('custom_media', 'by-subject', subjectId);
+    return allMedia
+      .filter(m => m.type === type)
+      .sort((a, b) => a.order - b.order);
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteCustomMedia(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('custom_media', id);
+  } catch (error) {
+    console.warn('[ClientDB] Failed to delete custom media:', error);
+  }
+}
+
+export async function deleteCustomMediaBySubject(subjectId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const media = await db.getAllFromIndex('custom_media', 'by-subject', subjectId);
+    const tx = db.transaction('custom_media', 'readwrite');
+    for (const m of media) {
+      await tx.store.delete(m.id);
+    }
+    await tx.done;
+  } catch (error) {
+    console.warn('[ClientDB] Failed to delete custom media for subject:', error);
+  }
+}
+
+export async function reorderCustomMedia(
+  subjectId: string,
+  orderedIds: string[]
+): Promise<void> {
+  try {
+    const db = await getDB();
+    const tx = db.transaction('custom_media', 'readwrite');
+    
+    for (let i = 0; i < orderedIds.length; i++) {
+      const media = await tx.store.get(orderedIds[i]);
+      if (media && media.subjectId === subjectId) {
+        media.order = i;
+        await tx.store.put(media);
+      }
+    }
+    
+    await tx.done;
+  } catch (error) {
+    console.warn('[ClientDB] Failed to reorder custom media:', error);
+  }
+}
+
+async function cleanupExcessCustomMedia(subjectId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const media = await db.getAllFromIndex('custom_media', 'by-subject', subjectId);
+    
+    if (media.length > MAX_CUSTOM_MEDIA) {
+      const sorted = media.sort((a, b) => a.uploadedAt - b.uploadedAt);
+      const toDelete = sorted.slice(0, media.length - MAX_CUSTOM_MEDIA);
+      
+      const tx = db.transaction('custom_media', 'readwrite');
+      for (const m of toDelete) {
+        await tx.store.delete(m.id);
+      }
+      await tx.done;
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+// =============================================================================
+// Animal Detection CRUD
+// =============================================================================
+
+export type AnimalDetectionDB = SafeOSDB['animal_detection']['value'];
+
+const MAX_ANIMAL_DETECTIONS = 500;
+
+export async function saveAnimalDetection(detection: AnimalDetectionDB): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.put('animal_detection', detection);
+    await cleanupExcessAnimalDetections();
+  } catch (error) {
+    console.warn('[ClientDB] Failed to save animal detection:', error);
+  }
+}
+
+export async function getAnimalDetection(id: string): Promise<AnimalDetectionDB | null> {
+  try {
+    const db = await getDB();
+    const detection = await db.get('animal_detection', id);
+    return detection || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getAllAnimalDetections(): Promise<AnimalDetectionDB[]> {
+  try {
+    const db = await getDB();
+    const detections = await db.getAllFromIndex('animal_detection', 'by-timestamp');
+    return detections.reverse(); // Newest first
+  } catch {
+    return [];
+  }
+}
+
+export async function getAnimalDetectionsByType(type: string): Promise<AnimalDetectionDB[]> {
+  try {
+    const db = await getDB();
+    const detections = await db.getAllFromIndex('animal_detection', 'by-type', type);
+    return detections.sort((a, b) => b.timestamp - a.timestamp);
+  } catch {
+    return [];
+  }
+}
+
+export async function getAnimalDetectionsByDanger(
+  dangerLevel: 'none' | 'low' | 'medium' | 'high' | 'extreme'
+): Promise<AnimalDetectionDB[]> {
+  try {
+    const db = await getDB();
+    const detections = await db.getAllFromIndex('animal_detection', 'by-danger', dangerLevel);
+    return detections.sort((a, b) => b.timestamp - a.timestamp);
+  } catch {
+    return [];
+  }
+}
+
+export async function getDangerousAnimalDetections(): Promise<AnimalDetectionDB[]> {
+  try {
+    const db = await getDB();
+    const all = await db.getAll('animal_detection');
+    return all
+      .filter(d => d.dangerLevel === 'high' || d.dangerLevel === 'extreme')
+      .sort((a, b) => b.timestamp - a.timestamp);
+  } catch {
+    return [];
+  }
+}
+
+export async function acknowledgeAnimalDetection(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const detection = await db.get('animal_detection', id);
+    if (detection) {
+      detection.acknowledged = true;
+      await db.put('animal_detection', detection);
+    }
+  } catch (error) {
+    console.warn('[ClientDB] Failed to acknowledge animal detection:', error);
+  }
+}
+
+export async function updateAnimalDetectionNotes(id: string, notes: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const detection = await db.get('animal_detection', id);
+    if (detection) {
+      detection.notes = notes;
+      await db.put('animal_detection', detection);
+    }
+  } catch (error) {
+    console.warn('[ClientDB] Failed to update animal detection notes:', error);
+  }
+}
+
+export async function deleteAnimalDetection(id: string): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.delete('animal_detection', id);
+  } catch (error) {
+    console.warn('[ClientDB] Failed to delete animal detection:', error);
+  }
+}
+
+export async function clearAllAnimalDetections(): Promise<void> {
+  try {
+    const db = await getDB();
+    await db.clear('animal_detection');
+  } catch (error) {
+    console.warn('[ClientDB] Failed to clear animal detections:', error);
+  }
+}
+
+async function cleanupExcessAnimalDetections(): Promise<void> {
+  try {
+    const db = await getDB();
+    const count = await db.count('animal_detection');
+    
+    if (count > MAX_ANIMAL_DETECTIONS) {
+      const detections = await db.getAllFromIndex('animal_detection', 'by-timestamp');
+      const toDelete = detections
+        .filter(d => d.acknowledged)
+        .slice(0, count - MAX_ANIMAL_DETECTIONS);
+      
+      const tx = db.transaction('animal_detection', 'readwrite');
+      for (const d of toDelete) {
+        await tx.store.delete(d.id);
+      }
+      await tx.done;
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+export async function cleanupOldAnimalDetections(olderThanDays: number): Promise<number> {
+  try {
+    const db = await getDB();
+    const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+    
+    const detections = await db.getAll('animal_detection');
+    const toDelete = detections.filter(d => d.timestamp < cutoff && d.acknowledged);
+    
+    const tx = db.transaction('animal_detection', 'readwrite');
+    for (const d of toDelete) {
+      await tx.store.delete(d.id);
+    }
+    await tx.done;
+    
+    return toDelete.length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function getAnimalDetectionStats(): Promise<{
+  total: number;
+  unacknowledged: number;
+  last24Hours: number;
+  last7Days: number;
+  largeAnimals: number;
+  smallAnimals: number;
+  dangerous: number;
+}> {
+  try {
+    const detections = await getAllAnimalDetections();
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    
+    const last24h = detections.filter(d => d.timestamp >= oneDayAgo);
+    const last7d = detections.filter(d => d.timestamp >= oneWeekAgo);
+    const unack = detections.filter(d => !d.acknowledged);
+    const large = detections.filter(d => d.sizeCategory === 'large');
+    const small = detections.filter(d => d.sizeCategory === 'small');
+    const dangerous = detections.filter(
+      d => d.dangerLevel === 'high' || d.dangerLevel === 'extreme'
+    );
+    
+    return {
+      total: detections.length,
+      unacknowledged: unack.length,
+      last24Hours: last24h.length,
+      last7Days: last7d.length,
+      largeAnimals: large.length,
+      smallAnimals: small.length,
+      dangerous: dangerous.length,
+    };
+  } catch {
+    return {
+      total: 0,
+      unacknowledged: 0,
+      last24Hours: 0,
+      last7Days: 0,
+      largeAnimals: 0,
+      smallAnimals: 0,
+      dangerous: 0,
     };
   }
 }

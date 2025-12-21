@@ -318,6 +318,184 @@
       "intruderBody": "{count} person(s) detected. {excess} unauthorized."
     },
     "silentModeInfo": "Silent Mode: Intrusions will be recorded without sound or visual alerts. You can review captured frames in the Intrusion Gallery."
+  },
+  "wildlife": {
+    "title": "Wildlife Detection",
+    "subtitle": "Detect and categorize animals with AI",
+    "monitoring": "Wildlife Monitoring",
+    "startMonitoring": "Start Monitoring",
+    "stopMonitoring": "Stop Monitoring",
+    "modelLoading": "Loading AI Model...",
+    "modelReady": "AI Model Ready",
+    "modelError": "AI Model Failed to Load",
+    "largeAnimals": "Large Animals",
+    "smallAnimals": "Small Animals",
+    "dangerous": "Dangerous",
+    "total": "Total Detections",
+    "recentDetections": "Recent Detections",
+    "noDetections": "No detections yet. Start monitoring to detect animals.",
+    "alertMode": "Alert Mode",
+    "voice": "Voice",
+    "sound": "Sound",
+    "both": "Both",
+    "silent": "Silent",
+    "settings": {
+      "title": "Wildlife Settings",
+      "detection": "Detection",
+      "confidenceThreshold": "Confidence Threshold",
+      "motionThreshold": "Motion Threshold",
+      "alertVolume": "Alert Volume",
+      "dangerLevelAlerts": "Danger Level Alerts",
+      "highExtremeDanger": "High/Extreme Danger",
+      "mediumCaution": "Medium (Caution)",
+      "notifications": "Notifications",
+      "browserNotifications": "Browser Notifications",
+      "flashScreen": "Flash Screen"
+    },
+    "toggles": {
+      "largeAnimalAlerts": "Large Animal Alerts",
+      "largeAnimalDesc": "Bears, deer, coyotes, wolves",
+      "smallAnimalAlerts": "Small Animal Alerts",
+      "smallAnimalDesc": "Rodents, rabbits, squirrels"
+    },
+    "dangerLevels": {
+      "extreme": "EXTREME DANGER",
+      "high": "High Risk",
+      "medium": "Caution",
+      "low": "Low Risk",
+      "none": "Safe"
+    }
+  },
+  "sessionTimer": {
+    "title": "Session Timer",
+    "active": "Session Active",
+    "expired": "Session Expired",
+    "remaining": "Time Remaining",
+    "rearmRequired": "Re-arm Required",
+    "rearmDescription": "For safety, monitoring sessions expire after 24 hours. Please re-arm to continue monitoring.",
+    "rearm": "Re-arm Monitoring",
+    "extend": "Extend Session",
+    "warning1h": "Session expires in 1 hour",
+    "warning15m": "Session expires in 15 minutes",
+    "warning5m": "Session expires in 5 minutes",
+    "warning1m": "Session expires in 1 minute"
+  },
+  "customMedia": {
+    "title": "Custom Media Alerts",
+    "subtitle": "Play custom images and audio when detected",
+    "enabled": "Enable Custom Media",
+    "uploadImages": "Upload Images",
+    "uploadAudio": "Upload Audio",
+    "ttsMessages": "TTS Messages",
+    "addMessage": "Add Message",
+    "playbackMode": "Playback Mode",
+    "repeatCount": "Repeat Count",
+    "loopUntilTimer": "Loop Until Timer",
+    "timerDuration": "Timer Duration",
+    "imageInterval": "Image Display Interval",
+    "preview": "Preview",
+    "startPreview": "Start Preview",
+    "stopPreview": "Stop Preview",
+    "noMedia": "No media uploaded. Add images or audio to play when your subject is detected."
+  },
+  "tutorials": {
+    "title": "Tutorials & Guides",
+    "subtitle": "Comprehensive guides to help you get the most out of SafeOS Guardian.",
+    "gettingStarted": "Getting Started",
+    "babyMonitoring": "Baby & Infant Monitoring",
+    "petMonitoring": "Pet Monitoring",
+    "securityMode": "Security & Intrusion Detection",
+    "lostFound": "Lost Pet/Person Watch Mode",
+    "wildlife": "Wildlife Detection",
+    "dataStorage": "Data & Privacy",
+    "advancedSettings": "Advanced Settings",
+    "faq": "Frequently Asked Questions",
+    "needHelp": "Still need help?",
+    "contactUs": "Contact us"
+  },
+  "about": {
+    "title": "About SafeOS",
+    "subtitle": "SafeOS Guardian",
+    "tagline": "A humanitarian tool for protecting what matters most—your loved ones, pets, and home.",
+    "mission": {
+      "title": "Our Mission",
+      "p1": "SafeOS Guardian was created with a singular purpose: to provide accessible, privacy-respecting monitoring tools for families worldwide.",
+      "p2": "Unlike cloud-based solutions that store your data on remote servers, SafeOS runs entirely in your browser.",
+      "disclaimer": "SafeOS Guardian is a supplemental, experimental tool for educated parents and caregivers. It is not a replacement for human supervision."
+    },
+    "values": {
+      "title": "Our Values",
+      "privacyFirst": "Privacy First",
+      "privacyFirstDesc": "All data stays on your device. We never collect, store, or sell your personal information.",
+      "openTransparent": "Open & Transparent",
+      "openTransparentDesc": "Our code is open source. Anyone can inspect, audit, and contribute.",
+      "humanitarian": "Humanitarian Purpose",
+      "humanitarianDesc": "SafeOS is built for families, not profit. Essential features are free forever.",
+      "accessible": "Accessible Globally",
+      "accessibleDesc": "Multi-language support and offline capabilities for families everywhere."
+    },
+    "tenPercent": {
+      "title": "10% for Humanity",
+      "subtitle": "A commitment to humanitarian causes",
+      "text": "If SafeOS ever generates revenue, we pledge to donate 10% to humanitarian organizations focused on child safety and missing persons recovery."
+    },
+    "technology": {
+      "title": "Technology",
+      "nextjs": "Next.js & React — Fast, responsive user interface",
+      "tensorflow": "TensorFlow.js — AI detection running in your browser",
+      "indexeddb": "IndexedDB — Local-first data storage",
+      "webaudio": "Web Audio API — Real-time audio analysis",
+      "mediadevices": "MediaDevices API — Camera and microphone access"
+    },
+    "abusePrevention": {
+      "title": "Abuse Prevention",
+      "text": "SafeOS Guardian is designed for legitimate monitoring purposes only.",
+      "warning1": "Surveillance without consent is illegal in most jurisdictions",
+      "warning2": "Rate limitations and warnings are implemented to prevent misuse",
+      "warning3": "We reserve the right to take down the service if abuse is detected"
+    },
+    "contact": {
+      "title": "Contact",
+      "text": "Have questions, feedback, or want to contribute?"
+    },
+    "foreverFree": {
+      "title": "SafeOS Guardian will always be free.",
+      "subtitle": "No subscriptions. No hidden fees. No data selling. Ever."
+    }
+  },
+  "donate": {
+    "title": "Support SafeOS",
+    "comingSoon": "Coming Soon",
+    "subtitle": "We're working on donation options to support SafeOS Guardian's humanitarian mission.",
+    "promise": {
+      "title": "Our Promise",
+      "text": "10% of all donations will go directly to humanitarian organizations focused on child safety and missing persons recovery."
+    },
+    "enable": {
+      "title": "What Your Support Will Enable",
+      "fasterDev": "Faster Development",
+      "fasterDevDesc": "More features, faster releases",
+      "globalTranslations": "Global Translations",
+      "globalTranslationsDesc": "Support for more languages",
+      "advancedAI": "Advanced AI",
+      "advancedAIDesc": "Improved detection algorithms",
+      "mobileApps": "Mobile Apps",
+      "mobileAppsDesc": "Native iOS and Android apps"
+    },
+    "notify": {
+      "title": "Get Notified When Donations Open",
+      "placeholder": "your@email.com",
+      "button": "Notify Me",
+      "thanks": "Thank you!",
+      "thanksText": "We'll notify you when donations are available."
+    },
+    "helpNow": {
+      "title": "Ways to Help Right Now",
+      "star": "Star us on GitHub",
+      "bugs": "Report bugs & request features",
+      "share": "Share SafeOS with friends & family"
+    },
+    "footer": "SafeOS Guardian is and will always remain free for essential features. Your support helps us go further, faster."
   }
 }
 

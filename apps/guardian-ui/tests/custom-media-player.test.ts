@@ -1,0 +1,345 @@
+/**
+ * Custom Media Player Tests
+ * 
+ * Unit tests for the custom media player library.
+ * 
+ * @module tests/custom-media-player.test
+ */
+
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+
+// Mock Howler
+jest.mock('howler', () => ({
+  Howl: jest.fn().mockImplementation(() => ({
+    play: jest.fn(),
+    pause: jest.fn(),
+    stop: jest.fn(),
+    unload: jest.fn(),
+  })),
+}));
+
+// Mock SpeechSynthesis
+const mockSpeechSynthesis = {
+  speak: jest.fn(),
+  cancel: jest.fn(),
+  pause: jest.fn(),
+  resume: jest.fn(),
+  getVoices: jest.fn().mockReturnValue([]),
+};
+
+(global as any).window = {
+  speechSynthesis: mockSpeechSynthesis,
+};
+
+(global as any).SpeechSynthesisUtterance = jest.fn().mockImplementation((text: string) => ({
+  text,
+  rate: 1,
+  pitch: 1,
+  volume: 1,
+  onend: null,
+  onerror: null,
+}));
+
+import {
+  CustomMediaPlayer,
+  getMediaPlayer,
+  resetMediaPlayer,
+  createUploadedImage,
+  createUploadedAudio,
+  formatDuration,
+  isValidImageFile,
+  isValidAudioFile,
+  calculateMediaSize,
+  formatBytes,
+  DEFAULT_MEDIA_CONFIG,
+  type UploadedImage,
+  type UploadedAudio,
+  type PlaybackMode,
+} from '../src/lib/custom-media-player';
+
+describe('CustomMediaPlayer', () => {
+  beforeEach(() => {
+    resetMediaPlayer();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetMediaPlayer();
+  });
+
+  describe('initialization', () => {
+    it('should create player with default config', () => {
+      const player = new CustomMediaPlayer();
+      expect(player).toBeDefined();
+    });
+
+    it('should accept custom config', () => {
+      const player = new CustomMediaPlayer({
+        playbackMode: 'loop',
+        repeatCount: 5,
+      });
+      expect(player).toBeDefined();
+    });
+
+    it('should accept callbacks', () => {
+      const callbacks = {
+        onImageChange: jest.fn(),
+        onAudioPlay: jest.fn(),
+      };
+      const player = new CustomMediaPlayer({}, callbacks);
+      expect(player).toBeDefined();
+    });
+  });
+
+  describe('getState', () => {
+    it('should return initial state', () => {
+      const player = new CustomMediaPlayer();
+      const state = player.getState();
+
+      expect(state.isPlaying).toBe(false);
+      expect(state.isPaused).toBe(false);
+      expect(state.currentImageIndex).toBe(-1);
+      expect(state.currentAudioIndex).toBe(-1);
+      expect(state.completedCycles).toBe(0);
+    });
+  });
+
+  describe('start', () => {
+    it('should start playback', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      const state = player.getState();
+
+      expect(state.isPlaying).toBe(true);
+      expect(state.startTime).not.toBeNull();
+    });
+
+    it('should not start if already playing', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      const firstStartTime = player.getState().startTime;
+      
+      player.start();
+      const secondStartTime = player.getState().startTime;
+
+      expect(firstStartTime).toBe(secondStartTime);
+    });
+  });
+
+  describe('stop', () => {
+    it('should stop playback', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      player.stop();
+      const state = player.getState();
+
+      expect(state.isPlaying).toBe(false);
+    });
+
+    it('should call onPlaybackEnd callback', () => {
+      const onPlaybackEnd = jest.fn();
+      const player = new CustomMediaPlayer({}, { onPlaybackEnd });
+      
+      player.start();
+      player.stop('manual');
+
+      expect(onPlaybackEnd).toHaveBeenCalledWith('manual');
+    });
+  });
+
+  describe('pause and resume', () => {
+    it('should pause playback', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      player.pause();
+      const state = player.getState();
+
+      expect(state.isPaused).toBe(true);
+      expect(state.isPlaying).toBe(true);
+    });
+
+    it('should resume playback', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      player.pause();
+      player.resume();
+      const state = player.getState();
+
+      expect(state.isPaused).toBe(false);
+      expect(state.isPlaying).toBe(true);
+    });
+
+    it('should not pause if not playing', () => {
+      const player = new CustomMediaPlayer();
+      player.pause();
+      const state = player.getState();
+
+      expect(state.isPaused).toBe(false);
+    });
+  });
+
+  describe('config update', () => {
+    it('should update config', () => {
+      const player = new CustomMediaPlayer({ repeatCount: 3 });
+      player.updateConfig({ repeatCount: 5 });
+      // Config update doesn't expose state, but shouldn't throw
+      expect(player).toBeDefined();
+    });
+  });
+
+  describe('dispose', () => {
+    it('should dispose resources', () => {
+      const player = new CustomMediaPlayer();
+      player.start();
+      player.dispose();
+      // Should stop playback
+      expect(player.getState().isPlaying).toBe(false);
+    });
+  });
+});
+
+describe('Singleton Functions', () => {
+  beforeEach(() => {
+    resetMediaPlayer();
+  });
+
+  afterEach(() => {
+    resetMediaPlayer();
+  });
+
+  it('should return same instance', () => {
+    const player1 = getMediaPlayer();
+    const player2 = getMediaPlayer();
+    expect(player1).toBe(player2);
+  });
+
+  it('should update config on existing instance', () => {
+    getMediaPlayer({ repeatCount: 3 });
+    const player = getMediaPlayer({ repeatCount: 5 });
+    expect(player).toBeDefined();
+  });
+
+  it('should create new instance after reset', () => {
+    const player1 = getMediaPlayer();
+    resetMediaPlayer();
+    const player2 = getMediaPlayer();
+    expect(player1).not.toBe(player2);
+  });
+});
+
+describe('Utility Functions', () => {
+  describe('formatDuration', () => {
+    it('should format milliseconds correctly', () => {
+      expect(formatDuration(500)).toBe('500ms');
+      expect(formatDuration(1000)).toBe('1s');
+      expect(formatDuration(60000)).toBe('1m 0s');
+      expect(formatDuration(3600000)).toBe('1h 0m');
+    });
+  });
+
+  describe('isValidImageFile', () => {
+    it('should validate image types', () => {
+      const validJpeg = { type: 'image/jpeg' } as File;
+      const validPng = { type: 'image/png' } as File;
+      const invalidPdf = { type: 'application/pdf' } as File;
+
+      expect(isValidImageFile(validJpeg)).toBe(true);
+      expect(isValidImageFile(validPng)).toBe(true);
+      expect(isValidImageFile(invalidPdf)).toBe(false);
+    });
+  });
+
+  describe('isValidAudioFile', () => {
+    it('should validate audio types', () => {
+      const validMp3 = { type: 'audio/mpeg' } as File;
+      const validWav = { type: 'audio/wav' } as File;
+      const invalidPdf = { type: 'application/pdf' } as File;
+
+      expect(isValidAudioFile(validMp3)).toBe(true);
+      expect(isValidAudioFile(validWav)).toBe(true);
+      expect(isValidAudioFile(invalidPdf)).toBe(false);
+    });
+  });
+
+  describe('calculateMediaSize', () => {
+    it('should calculate total size of media', () => {
+      const images: UploadedImage[] = [
+        {
+          id: '1',
+          name: 'test.jpg',
+          data: 'data:image/jpeg;base64,AAAA', // ~4 bytes
+          mimeType: 'image/jpeg',
+          uploadedAt: Date.now(),
+        },
+      ];
+
+      const audioFiles: UploadedAudio[] = [
+        {
+          id: '2',
+          name: 'test.mp3',
+          data: 'data:audio/mpeg;base64,BBBB', // ~4 bytes
+          mimeType: 'audio/mpeg',
+          uploadedAt: Date.now(),
+        },
+      ];
+
+      const size = calculateMediaSize(images, audioFiles);
+      expect(size).toBeGreaterThan(0);
+    });
+
+    it('should return 0 for empty arrays', () => {
+      const size = calculateMediaSize([], []);
+      expect(size).toBe(0);
+    });
+  });
+
+  describe('formatBytes', () => {
+    it('should format bytes correctly', () => {
+      expect(formatBytes(500)).toBe('500 B');
+      expect(formatBytes(1024)).toBe('1.0 KB');
+      expect(formatBytes(1048576)).toBe('1.0 MB');
+    });
+  });
+});
+
+describe('Default Config', () => {
+  it('should have expected default values', () => {
+    expect(DEFAULT_MEDIA_CONFIG.images).toEqual([]);
+    expect(DEFAULT_MEDIA_CONFIG.audioFiles).toEqual([]);
+    expect(DEFAULT_MEDIA_CONFIG.playbackMode).toBe('count');
+    expect(DEFAULT_MEDIA_CONFIG.repeatCount).toBe(3);
+    expect(DEFAULT_MEDIA_CONFIG.timerDurationMs).toBe(60000);
+    expect(DEFAULT_MEDIA_CONFIG.displayIntervalMs).toBe(3000);
+    expect(DEFAULT_MEDIA_CONFIG.shuffleOrder).toBe(false);
+    expect(DEFAULT_MEDIA_CONFIG.ttsMessages).toEqual([]);
+    expect(DEFAULT_MEDIA_CONFIG.ttsEnabled).toBe(true);
+    expect(DEFAULT_MEDIA_CONFIG.audioEnabled).toBe(true);
+    expect(DEFAULT_MEDIA_CONFIG.imageEnabled).toBe(true);
+  });
+});
+
+describe('Playback Modes', () => {
+  it('should support count mode', () => {
+    const player = new CustomMediaPlayer({
+      playbackMode: 'count',
+      repeatCount: 3,
+    });
+    expect(player).toBeDefined();
+  });
+
+  it('should support loop mode', () => {
+    const player = new CustomMediaPlayer({
+      playbackMode: 'loop',
+    });
+    expect(player).toBeDefined();
+  });
+
+  it('should support timer mode', () => {
+    const player = new CustomMediaPlayer({
+      playbackMode: 'timer',
+      timerDurationMs: 30000,
+    });
+    expect(player).toBeDefined();
+  });
+});
+

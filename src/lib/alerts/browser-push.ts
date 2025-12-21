@@ -2,27 +2,42 @@
  * Browser Push Notifications
  *
  * Web Push API integration for browser notifications.
+ * Uses VAPID for authentication.
  *
  * @module lib/alerts/browser-push
  */
 
-import type { NotificationPayload } from '../../types/index.js';
+import type { NotificationPayload, AlertSeverity } from '../../types/index.js';
+import { generateId } from '../../db/index.js';
+
+// =============================================================================
+// Configuration
+// =============================================================================
+
+export interface PushConfig {
+  vapidPublicKey: string;
+  vapidPrivateKey: string;
+  vapidSubject: string;
+}
+
+const DEFAULT_CONFIG: PushConfig = {
+  vapidPublicKey: process.env['VAPID_PUBLIC_KEY'] || '',
+  vapidPrivateKey: process.env['VAPID_PRIVATE_KEY'] || '',
+  vapidSubject: process.env['VAPID_SUBJECT'] || 'mailto:admin@safeos.app',
+};
 
 // =============================================================================
 // Types
 // =============================================================================
 
 export interface PushSubscription {
+  id: string;
   endpoint: string;
   keys: {
     p256dh: string;
     auth: string;
   };
-}
-
-export interface BrowserPushConfig {
-  vapidPublicKey?: string;
-  vapidPrivateKey?: string;
+  registeredAt: string;
 }
 
 // =============================================================================
@@ -30,11 +45,38 @@ export interface BrowserPushConfig {
 // =============================================================================
 
 export class BrowserPushService {
-  private config: BrowserPushConfig;
+  private config: PushConfig;
+  private enabled: boolean;
   private subscriptions: Map<string, PushSubscription> = new Map();
+  private sentCount = 0;
+  private failedSubscriptions: Set<string> = new Set();
 
-  constructor(config?: BrowserPushConfig) {
-    this.config = config || {};
+  constructor(config?: Partial<PushConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.enabled = !!(this.config.vapidPublicKey && this.config.vapidPrivateKey);
+
+    if (this.enabled) {
+      console.log('[Push] Browser push service enabled');
+    } else {
+      console.log('[Push] Browser push service disabled (missing VAPID keys)');
+    }
+  }
+
+  // ===========================================================================
+  // Configuration
+  // ===========================================================================
+
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
+  getPublicKey(): string {
+    return this.config.vapidPublicKey;
+  }
+
+  updateConfig(config: Partial<PushConfig>): void {
+    this.config = { ...this.config, ...config };
+    this.enabled = !!(this.config.vapidPublicKey && this.config.vapidPrivateKey);
   }
 
   // ===========================================================================
@@ -44,24 +86,35 @@ export class BrowserPushService {
   /**
    * Register a push subscription
    */
-  registerSubscription(userId: string, subscription: PushSubscription): void {
-    this.subscriptions.set(userId, subscription);
-    console.log(`[BrowserPush] Registered subscription for ${userId}`);
+  subscribe(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): string {
+    const id = generateId();
+    const sub: PushSubscription = {
+      id,
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+      registeredAt: new Date().toISOString(),
+    };
+
+    this.subscriptions.set(id, sub);
+    console.log(`[Push] Registered subscription ${id}`);
+
+    return id;
   }
 
   /**
-   * Remove a push subscription
+   * Unregister a push subscription
    */
-  unregisterSubscription(userId: string): void {
-    this.subscriptions.delete(userId);
-    console.log(`[BrowserPush] Unregistered subscription for ${userId}`);
+  unsubscribe(subscriptionId: string): void {
+    this.subscriptions.delete(subscriptionId);
+    this.failedSubscriptions.delete(subscriptionId);
+    console.log(`[Push] Unregistered subscription ${subscriptionId}`);
   }
 
   /**
-   * Get subscription count
+   * Check if a subscription exists
    */
-  getSubscriptionCount(): number {
-    return this.subscriptions.size;
+  hasSubscription(subscriptionId: string): boolean {
+    return this.subscriptions.has(subscriptionId);
   }
 
   // ===========================================================================
@@ -69,106 +122,190 @@ export class BrowserPushService {
   // ===========================================================================
 
   /**
-   * Send a push notification to a specific user
+   * Send a push notification to a specific subscription
    */
-  async sendToUser(userId: string, payload: NotificationPayload): Promise<boolean> {
-    const subscription = this.subscriptions.get(userId);
-    if (!subscription) {
-      console.warn(`[BrowserPush] No subscription found for ${userId}`);
+  async sendToSubscription(
+    subscriptionId: string,
+    payload: NotificationPayload
+  ): Promise<boolean> {
+    if (!this.enabled) {
+      console.warn('[Push] Cannot send - service not enabled');
       return false;
     }
 
-    return this.sendToSubscription(subscription, payload);
+    const subscription = this.subscriptions.get(subscriptionId);
+    if (!subscription) {
+      console.warn(`[Push] Subscription ${subscriptionId} not found`);
+      return false;
+    }
+
+    return this.sendToEndpoint(subscription, payload);
   }
 
   /**
-   * Send a push notification to all subscribers
+   * Send notification to all subscriptions
    */
-  async sendToAll(payload: NotificationPayload): Promise<number> {
-    let successCount = 0;
+  async sendToAll(payload: NotificationPayload): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
 
-    for (const [userId, subscription] of this.subscriptions) {
-      try {
-        const success = await this.sendToSubscription(subscription, payload);
-        if (success) {
-          successCount++;
-        }
-      } catch (error) {
-        console.error(`[BrowserPush] Failed to send to ${userId}:`, error);
+    for (const subscription of this.subscriptions.values()) {
+      const result = await this.sendToEndpoint(subscription, payload);
+      if (result) {
+        success++;
+      } else {
+        failed++;
       }
     }
 
-    return successCount;
+    return { success, failed };
   }
 
   /**
-   * Send a push notification to a subscription
+   * Send to a specific endpoint
    */
-  private async sendToSubscription(
+  private async sendToEndpoint(
     subscription: PushSubscription,
     payload: NotificationPayload
   ): Promise<boolean> {
-    // In a real implementation, this would use the web-push library
-    // For now, we log and return success
-    console.log(`[BrowserPush] Would send to ${subscription.endpoint}:`, payload.title);
+    try {
+      const pushPayload = this.formatPushPayload(payload);
 
-    // Note: Actual implementation requires:
-    // 1. Install web-push: npm install web-push
-    // 2. Generate VAPID keys: npx web-push generate-vapid-keys
-    // 3. Use webpush.sendNotification()
+      // Build the authorization header using VAPID
+      const headers = await this.buildVapidHeaders(subscription.endpoint);
 
-    // Placeholder for actual web-push implementation
-    /*
-    import webpush from 'web-push';
-    
-    webpush.setVapidDetails(
-      'mailto:safety@supercloud.dev',
-      this.config.vapidPublicKey,
-      this.config.vapidPrivateKey
-    );
-    
-    await webpush.sendNotification(subscription, JSON.stringify({
-      title: payload.title,
-      body: payload.body,
-      icon: '/icons/safeos-192.png',
-      badge: '/icons/badge-72.png',
-      tag: payload.alertId,
-      data: {
-        url: payload.url || `/alerts/${payload.alertId}`,
-        severity: payload.severity,
-        streamId: payload.streamId,
-      },
-    }));
-    */
+      const response = await fetch(subscription.endpoint, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/octet-stream',
+          'Content-Encoding': 'aes128gcm',
+          TTL: '86400', // 24 hours
+        },
+        body: await this.encryptPayload(pushPayload, subscription.keys),
+      });
 
-    return true;
+      if (response.status === 201) {
+        this.sentCount++;
+        console.log(`[Push] Sent notification to subscription ${subscription.id}`);
+        return true;
+      }
+
+      if (response.status === 404 || response.status === 410) {
+        // Subscription expired, remove it
+        console.log(`[Push] Subscription ${subscription.id} expired, removing`);
+        this.subscriptions.delete(subscription.id);
+        this.failedSubscriptions.add(subscription.id);
+        return false;
+      }
+
+      console.error(`[Push] Failed to send: ${response.status} ${response.statusText}`);
+      return false;
+    } catch (error) {
+      console.error('[Push] Error sending notification:', error);
+      return false;
+    }
   }
 
   // ===========================================================================
-  // Payload Helpers
+  // Payload Formatting
   // ===========================================================================
 
-  /**
-   * Create a notification payload from an alert
-   */
-  static createPayload(
-    title: string,
-    body: string,
-    options: {
-      severity: NotificationPayload['severity'];
-      streamId: string;
-      alertId: string;
-      url?: string;
-    }
-  ): NotificationPayload {
-    return {
-      title,
-      body,
-      severity: options.severity,
-      streamId: options.streamId,
-      alertId: options.alertId,
-      url: options.url,
+  private formatPushPayload(payload: NotificationPayload): string {
+    const severityIcon: Record<AlertSeverity, string> = {
+      info: '/icons/info.png',
+      warning: '/icons/warning.png',
+      urgent: '/icons/urgent.png',
+      critical: '/icons/critical.png',
     };
+
+    const notification = {
+      title: payload.title,
+      body: payload.body,
+      icon: severityIcon[payload.severity] || '/icons/default.png',
+      badge: '/icons/badge.png',
+      tag: payload.alertId,
+      requireInteraction: payload.severity === 'critical' || payload.severity === 'urgent',
+      actions: [
+        { action: 'acknowledge', title: 'Acknowledge' },
+        { action: 'view', title: 'View Alert' },
+      ],
+      data: {
+        url: payload.url || '/',
+        alertId: payload.alertId,
+        streamId: payload.streamId,
+        severity: payload.severity,
+      },
+    };
+
+    return JSON.stringify(notification);
+  }
+
+  // ===========================================================================
+  // VAPID & Encryption (Simplified - in production use web-push library)
+  // ===========================================================================
+
+  private async buildVapidHeaders(
+    endpoint: string
+  ): Promise<{ Authorization: string; 'Crypto-Key': string }> {
+    // In production, use the web-push library for proper VAPID header generation
+    // This is a placeholder implementation
+
+    // Extract audience from endpoint
+    const url = new URL(endpoint);
+    const audience = `${url.protocol}//${url.host}`;
+
+    // Create JWT header
+    const header = {
+      typ: 'JWT',
+      alg: 'ES256',
+    };
+
+    // Create JWT payload
+    const jwtPayload = {
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60, // 12 hours
+      sub: this.config.vapidSubject,
+    };
+
+    // In production, sign with private key
+    // For now, return placeholder
+    const token = `${Buffer.from(JSON.stringify(header)).toString('base64url')}.${Buffer.from(JSON.stringify(jwtPayload)).toString('base64url')}.SIGNATURE`;
+
+    return {
+      Authorization: `vapid t=${token}, k=${this.config.vapidPublicKey}`,
+      'Crypto-Key': `p256ecdsa=${this.config.vapidPublicKey}`,
+    };
+  }
+
+  private async encryptPayload(
+    payload: string,
+    keys: { p256dh: string; auth: string }
+  ): Promise<Uint8Array> {
+    // In production, use proper ECDH encryption
+    // This is a placeholder - the actual payload needs to be encrypted
+    // using the subscription's p256dh and auth keys
+
+    // For now, return the payload as bytes
+    // Real implementation would use aes128gcm encryption
+    const encoder = new TextEncoder();
+    return encoder.encode(payload);
+  }
+
+  // ===========================================================================
+  // Stats
+  // ===========================================================================
+
+  getSentCount(): number {
+    return this.sentCount;
+  }
+
+  getSubscriptionCount(): number {
+    return this.subscriptions.size;
+  }
+
+  getFailedSubscriptionCount(): number {
+    return this.failedSubscriptions.size;
   }
 }
 
@@ -178,10 +315,9 @@ export class BrowserPushService {
 
 let defaultService: BrowserPushService | null = null;
 
-export function getDefaultBrowserPushService(): BrowserPushService {
+export function getDefaultPushService(): BrowserPushService {
   if (!defaultService) {
     defaultService = new BrowserPushService();
   }
   return defaultService;
 }
-

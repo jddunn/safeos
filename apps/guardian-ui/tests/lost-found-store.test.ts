@@ -7,7 +7,7 @@
  * @module tests/lost-found-store.test
  */
 
-// Using Jest testing framework
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { VisualFingerprint } from '../src/lib/visual-fingerprint';
 import type { MatchResult } from '../src/lib/subject-matcher';
 

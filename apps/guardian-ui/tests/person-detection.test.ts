@@ -6,6 +6,8 @@
  * @module tests/person-detection.test
  */
 
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+
 import {
   PersonDetector,
   getPersonDetector,
@@ -22,8 +24,8 @@ import {
 
 // Mock TensorFlow.js and COCO-SSD
 jest.mock('@tensorflow/tfjs', () => ({
-  setBackend: jest.fn().mockResolvedValue(undefined),
-  ready: jest.fn().mockResolvedValue(undefined),
+  setBackend: jest.fn().mockResolvedValue(undefined as never),
+  ready: jest.fn().mockResolvedValue(undefined as never),
 }));
 
 jest.mock('@tensorflow-models/coco-ssd', () => ({
@@ -32,8 +34,8 @@ jest.mock('@tensorflow-models/coco-ssd', () => ({
       { class: 'person', score: 0.95, bbox: [10, 20, 100, 200] },
       { class: 'person', score: 0.85, bbox: [150, 30, 90, 180] },
       { class: 'dog', score: 0.9, bbox: [300, 100, 50, 40] }, // Should be filtered
-    ]),
-  }),
+    ] as never),
+  } as never),
 }));
 
 // Mock document.createElement for canvas

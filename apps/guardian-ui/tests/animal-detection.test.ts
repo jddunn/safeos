@@ -10,8 +10,8 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 
 // Mock TensorFlow and COCO-SSD before importing
 jest.mock('@tensorflow/tfjs', () => ({
-  setBackend: jest.fn().mockResolvedValue(undefined),
-  ready: jest.fn().mockResolvedValue(undefined),
+  setBackend: jest.fn().mockResolvedValue(undefined as never),
+  ready: jest.fn().mockResolvedValue(undefined as never),
 }));
 
 jest.mock('@tensorflow-models/coco-ssd', () => ({
@@ -19,8 +19,8 @@ jest.mock('@tensorflow-models/coco-ssd', () => ({
     detect: jest.fn().mockResolvedValue([
       { bbox: [10, 10, 50, 50], class: 'dog', score: 0.85 },
       { bbox: [60, 60, 40, 40], class: 'cat', score: 0.75 },
-    ]),
-  }),
+    ] as never),
+  } as never),
 }));
 
 import {

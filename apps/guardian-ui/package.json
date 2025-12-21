@@ -16,8 +16,6 @@
     "export": "next build && next export"
   },
   "dependencies": {
-    "@tensorflow-models/coco-ssd": "^2.2.3",
-    "@tensorflow/tfjs": "^4.17.0",
     "@capacitor/app": "^5.0.6",
     "@capacitor/camera": "^5.0.8",
     "@capacitor/core": "^5.6.0",
@@ -29,6 +27,8 @@
     "@capacitor/push-notifications": "^5.1.1",
     "@capacitor/splash-screen": "^5.0.7",
     "@capacitor/status-bar": "^5.0.7",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs": "^4.17.0",
     "idb": "^7.1.1",
     "next": "^14.0.0",
     "next-intl": "^4.6.1",
@@ -42,6 +42,7 @@
     "@playwright/test": "^1.40.1",
     "@testing-library/jest-dom": "^6.1.6",
     "@testing-library/react": "^14.1.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",

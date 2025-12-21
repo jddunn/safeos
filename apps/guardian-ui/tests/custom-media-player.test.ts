@@ -31,7 +31,7 @@ const mockSpeechSynthesis = {
   speechSynthesis: mockSpeechSynthesis,
 };
 
-(global as any).SpeechSynthesisUtterance = jest.fn().mockImplementation((text: string) => ({
+(global as any).SpeechSynthesisUtterance = jest.fn().mockImplementation((text: unknown) => ({
   text,
   rate: 1,
   pitch: 1,

@@ -7,30 +7,9 @@
  * @module tests/security-store.test
  */
 
-// =============================================================================
-// Mock localStorage before imports
-// =============================================================================
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
-const mockStorage: Record<string, string> = {};
-const localStorageMock = {
-  getItem: jest.fn((key: string) => mockStorage[key] || null),
-  setItem: jest.fn((key: string, value: string) => {
-    mockStorage[key] = value;
-  }),
-  removeItem: jest.fn((key: string) => {
-    delete mockStorage[key];
-  }),
-  clear: jest.fn(() => {
-    Object.keys(mockStorage).forEach((key) => delete mockStorage[key]);
-  }),
-  length: 0,
-  key: jest.fn(() => null),
-};
-
-Object.defineProperty(global, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-});
+// localStorage is mocked in setup.ts
 
 // =============================================================================
 // Imports
@@ -74,9 +53,9 @@ function createMockIntrusionFrame(
 
 describe('Security Store', () => {
   beforeEach(() => {
-    localStorageMock.clear();
+    // Clear storage
+    localStorage.clear();
     jest.clearAllMocks();
-    jest.resetModules();
     
     // Reset store to initial state
     useSecurityStore.setState({

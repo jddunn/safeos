@@ -4,6 +4,8 @@
  * Configuration and global mocks for unit tests.
  */
 
+/// <reference types="jest" />
+
 // Note: @testing-library/jest-dom can be added for enhanced matchers
 // import '@testing-library/jest-dom';
 
@@ -40,46 +42,74 @@ if (typeof performance === 'undefined') {
 }
 
 // Mock localStorage for zustand persist middleware
-const localStorageMock = {
-  store: {} as Record<string, string>,
-  getItem: jest.fn((key: string) => localStorageMock.store[key] || null),
-  setItem: jest.fn((key: string, value: string) => {
-    localStorageMock.store[key] = value;
-  }),
-  removeItem: jest.fn((key: string) => {
-    delete localStorageMock.store[key];
-  }),
-  clear: jest.fn(() => {
-    localStorageMock.store = {};
-  }),
-  get length() {
-    return Object.keys(localStorageMock.store).length;
-  },
-  key: jest.fn((index: number) => Object.keys(localStorageMock.store)[index] || null),
-};
-
-if (typeof global.localStorage === 'undefined') {
-  (global as any).localStorage = localStorageMock;
+// Use a class to ensure proper method binding
+class LocalStorageMock implements Storage {
+  private store: Record<string, string> = {};
+  
+  get length(): number {
+    return Object.keys(this.store).length;
+  }
+  
+  clear(): void {
+    this.store = {};
+  }
+  
+  getItem(key: string): string | null {
+    return this.store[key] ?? null;
+  }
+  
+  key(index: number): string | null {
+    return Object.keys(this.store)[index] ?? null;
+  }
+  
+  removeItem(key: string): void {
+    delete this.store[key];
+  }
+  
+  setItem(key: string, value: string): void {
+    this.store[key] = String(value);
+  }
 }
 
-if (typeof global.sessionStorage === 'undefined') {
-  (global as any).sessionStorage = localStorageMock;
-}
+const localStorageMock = new LocalStorageMock();
+
+// Always set up localStorage mock (even if defined) to ensure consistency
+Object.defineProperty(global, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(global, 'sessionStorage', {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});
 
 // Create a minimal window object if it doesn't exist
 if (typeof global.window === 'undefined') {
-  (global as any).window = {
-    localStorage: localStorageMock,
-    sessionStorage: localStorageMock,
-  };
+  (global as any).window = {};
 }
+
+// Set localStorage on window as well
+Object.defineProperty((global as any).window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty((global as any).window, 'sessionStorage', {
+  value: localStorageMock,
+  writable: true,
+  configurable: true,
+});
 
 // Only setup browser mocks if window is defined with proper DOM (jsdom environment)
 if (typeof window !== 'undefined' && typeof HTMLCanvasElement !== 'undefined') {
   // Mock window.matchMedia
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: jest.fn().mockImplementation(query => ({
+    value: jest.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
       onchange: null,

@@ -1,0 +1,58 @@
+{
+  "name": "@supercloud/safeos",
+  "version": "0.1.0",
+  "description": "SafeOS - Free AI monitoring service for pets, babies, and elderly care. Part of SuperCloud's humanitarian mission.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "api": "tsx src/api/server.ts",
+    "api:dev": "tsx watch src/api/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "keywords": [
+    "safeos",
+    "monitoring",
+    "ai",
+    "pet-monitoring",
+    "baby-monitor",
+    "elderly-care",
+    "ollama",
+    "vision",
+    "humanitarian"
+  ],
+  "author": "SuperCloud <team@supercloud.dev>",
+  "license": "MIT",
+  "dependencies": {
+    "@framers/sql-storage-adapter": "^0.5.0",
+    "express": "^5.2.1",
+    "ws": "^8.18.3",
+    "zod": "^3.23.8",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.18.1",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "5.8.3",
+    "vitest": "^2.1.0"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^12.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

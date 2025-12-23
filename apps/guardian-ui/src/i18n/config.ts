@@ -40,3 +40,4 @@ export function isRtl(locale: Locale): boolean {
   return rtlLocales.includes(locale);
 }
 
+

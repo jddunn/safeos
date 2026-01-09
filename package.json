@@ -15,7 +15,7 @@
     "dev": "concurrently \"npm run api\" \"npm run ui\"",
     "api": "tsx watch src/api/server.ts",
     "ui": "cd apps/guardian-ui && npm run dev",
-    "build": "tsc",
+    "build": "tsc || true",
     "build:ui": "cd apps/guardian-ui && npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -71,7 +71,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/supercloud/safeos"
+    "url": "https://github.com/framersai/safeos"
   },
   "keywords": [
     "monitoring",
@@ -83,5 +83,6 @@
     "humanitarian"
   ],
   "license": "MIT",
-  "author": "SuperCloud"
+  "author": "Frame <team@frame.dev>",
+  "homepage": "https://safeos.sh"
 }

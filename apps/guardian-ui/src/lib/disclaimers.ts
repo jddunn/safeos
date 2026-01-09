@@ -100,6 +100,36 @@ This tool can help alert you to obvious issues but cannot replace
 attentive pet ownership and regular veterinary check-ups.
 `.trim();
 
+export const NAP_MODE_DISCLAIMER = `
+⏰ NAP TIME MONITORING - CRITICAL NOTICE
+
+This feature is designed ONLY for brief daytime naps (15-60 minutes)
+when a caregiver needs to rest while a child sleeps nearby.
+
+⚠️ THIS IS NOT:
+• A replacement for human supervision
+• Suitable for overnight or extended sleep periods
+• A substitute for proper childcare arrangements
+• 100% reliable - technology can fail
+
+🛡️ BEFORE USING NAP MODE:
+• Ensure the child is in a safe, childproofed environment
+• Position camera to clearly see the child's sleep area
+• Test that your device volume is LOUD and unmuted
+• Set a backup phone alarm for your maximum nap time
+• Keep your device close enough to hear alerts
+
+⚡ IMPORTANT REMINDERS:
+• Children can move silently - detection is not guaranteed
+• You are FULLY RESPONSIBLE for child safety at all times
+• If you feel too tired to respond to alerts, do NOT nap
+• Consider having another adult available if possible
+
+By activating Nap Mode, you acknowledge this is a SUPPLEMENTARY
+convenience tool only, and you accept full responsibility for
+the safety of any children under your care.
+`.trim();
+
 // =============================================================================
 // Acknowledgment Text
 // =============================================================================

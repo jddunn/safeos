@@ -9,6 +9,8 @@
 import { Router, Request, Response } from 'express';
 import { getSafeOSDatabase, now } from '../../db';
 import { requireAuth } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
+import { AcknowledgeAllAlertsSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Router
@@ -125,7 +127,7 @@ alertRoutes.post('/:id/acknowledge', async (req: Request, res: Response) => {
 /**
  * POST /api/alerts/:id/acknowledge/all - Acknowledge all alerts for a stream
  */
-alertRoutes.post('/acknowledge/all', async (req: Request, res: Response) => {
+alertRoutes.post('/acknowledge/all', validate(AcknowledgeAllAlertsSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { streamId } = req.body;

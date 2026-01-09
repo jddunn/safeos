@@ -8,6 +8,8 @@
 
 import { Router, Request, Response } from 'express';
 import { getSafeOSDatabase, now } from '../../db';
+import { validate } from '../middleware/validate.js';
+import { ReviewActionSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Router
@@ -100,7 +102,7 @@ reviewRoutes.get('/flags/:id', async (req: Request, res: Response) => {
 /**
  * POST /api/review/flags/:id/action - Take action on a flag
  */
-reviewRoutes.post('/flags/:id/action', async (req: Request, res: Response) => {
+reviewRoutes.post('/flags/:id/action', validate(ReviewActionSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { id } = req.params;
@@ -109,11 +111,6 @@ reviewRoutes.post('/flags/:id/action', async (req: Request, res: Response) => {
     const flag = await db.get('SELECT * FROM content_flags WHERE id = ?', [id]);
     if (!flag) {
       return res.status(404).json({ error: 'Flag not found' });
-    }
-
-    const validActions = ['approved', 'rejected', 'escalated', 'banned'];
-    if (!action || !validActions.includes(action)) {
-      return res.status(400).json({ error: 'Invalid action' });
     }
 
     await db.run(

@@ -9,6 +9,8 @@
 import { Router } from 'express';
 import { createHmac, randomBytes } from 'crypto';
 import { getSafeOSDatabase, generateId, now } from '../../db/index.js';
+import { validate } from '../middleware/validate.js';
+import { CreateWebhookSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Types
@@ -90,7 +92,7 @@ webhookRouter.get('/', async (req, res) => {
  * POST /api/webhooks
  * Create a new webhook
  */
-webhookRouter.post('/', async (req, res) => {
+webhookRouter.post('/', validate(CreateWebhookSchema), async (req, res) => {
   try {
     const token = req.headers['x-session-token'] as string;
     if (!token) {
@@ -98,30 +100,6 @@ webhookRouter.post('/', async (req, res) => {
     }
 
     const { name, url, events } = req.body;
-
-    if (!name || !url || !events || !Array.isArray(events)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Name, URL, and events array are required',
-      });
-    }
-
-    // Validate URL
-    try {
-      new URL(url);
-    } catch {
-      return res.status(400).json({ success: false, error: 'Invalid webhook URL' });
-    }
-
-    // Validate events
-    const validEvents = ['alert.created', 'alert.acknowledged', 'stream.started', 'stream.ended', 'analysis.completed', 'review.required'];
-    const invalidEvents = events.filter((e: string) => !validEvents.includes(e));
-    if (invalidEvents.length > 0) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid events: ${invalidEvents.join(', ')}. Valid: ${validEvents.join(', ')}`,
-      });
-    }
 
     const db = await getSafeOSDatabase();
 

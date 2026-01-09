@@ -10,6 +10,8 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { getSafeOSDatabase, generateId, now } from '../../db/index.js';
+import { validate } from '../middleware/validate.js';
+import { CreateSessionSchema, UpdateUserProfileSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Types
@@ -50,7 +52,7 @@ export const authRouter = Router();
  * POST /api/auth/session
  * Create a new session (guest or returning user)
  */
-authRouter.post('/session', async (req, res) => {
+authRouter.post('/session', validate(CreateSessionSchema), async (req, res) => {
   try {
     const db = await getSafeOSDatabase();
     const { deviceId, displayName } = req.body;
@@ -338,7 +340,7 @@ authRouter.get('/profile', async (req, res) => {
  * PATCH /api/auth/profile
  * Update user profile
  */
-authRouter.patch('/profile', async (req, res) => {
+authRouter.patch('/profile', validate(UpdateUserProfileSchema), async (req, res) => {
   try {
     const token = req.headers['x-session-token'] as string;
 

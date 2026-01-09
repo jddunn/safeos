@@ -8,12 +8,18 @@
 
 import { Router, Request, Response } from 'express';
 import { getSafeOSDatabase, generateId, now } from '../../db';
+import { validate } from '../middleware/validate.js';
+import { CreateProfileSchema, UpdateProfileSchema } from '../schemas/index.js';
+import { requireAuth } from '../middleware/auth.js';
 
 // =============================================================================
 // Router
 // =============================================================================
 
 export const profileRoutes = Router();
+
+// Apply auth middleware to all profile routes
+profileRoutes.use(requireAuth);
 
 // =============================================================================
 // Routes
@@ -81,18 +87,10 @@ profileRoutes.get('/:id', async (req: Request, res: Response) => {
 /**
  * POST /api/profiles - Create new profile
  */
-profileRoutes.post('/', async (req: Request, res: Response) => {
+profileRoutes.post('/', validate(CreateProfileSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { name, scenario, settings } = req.body;
-
-    if (!name || !scenario) {
-      return res.status(400).json({ error: 'Name and scenario are required' });
-    }
-
-    if (!['pet', 'baby', 'elderly'].includes(scenario)) {
-      return res.status(400).json({ error: 'Invalid scenario' });
-    }
 
     const id = generateId();
     const timestamp = now();
@@ -120,7 +118,7 @@ profileRoutes.post('/', async (req: Request, res: Response) => {
 /**
  * PATCH /api/profiles/:id - Update profile
  */
-profileRoutes.patch('/:id', async (req: Request, res: Response) => {
+profileRoutes.patch('/:id', validate(UpdateProfileSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { id } = req.params;

@@ -7,6 +7,8 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { validate } from '../middleware/validate.js';
+import { PushSubscriptionSchema, TelegramConfigSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Router
@@ -25,13 +27,9 @@ const telegramChatIds: Set<string> = new Set();
 /**
  * POST /api/notifications/subscribe - Subscribe to browser push
  */
-notificationRoutes.post('/subscribe', async (req: Request, res: Response) => {
+notificationRoutes.post('/subscribe', validate(PushSubscriptionSchema), async (req: Request, res: Response) => {
   try {
     const { subscription, userId } = req.body;
-
-    if (!subscription) {
-      return res.status(400).json({ error: 'Subscription required' });
-    }
 
     const id = userId || `user-${Date.now()}`;
     pushSubscriptions.set(id, subscription);
@@ -64,13 +62,9 @@ notificationRoutes.delete('/subscribe', async (req: Request, res: Response) => {
 /**
  * POST /api/notifications/telegram/register - Register Telegram chat ID
  */
-notificationRoutes.post('/telegram/register', async (req: Request, res: Response) => {
+notificationRoutes.post('/telegram/register', validate(TelegramConfigSchema), async (req: Request, res: Response) => {
   try {
     const { chatId } = req.body;
-
-    if (!chatId) {
-      return res.status(400).json({ error: 'Chat ID required' });
-    }
 
     telegramChatIds.add(chatId);
 

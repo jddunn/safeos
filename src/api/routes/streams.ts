@@ -9,6 +9,8 @@
 import { Router, Request, Response } from 'express';
 import { getSafeOSDatabase, generateId, now } from '../../db';
 import { requireAuth, getProfileId } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
+import { CreateStreamSchema, UpdateStreamSchema } from '../schemas/index.js';
 
 // =============================================================================
 // Router
@@ -82,15 +84,11 @@ streamRoutes.get('/:id', async (req: Request, res: Response) => {
 /**
  * POST /api/streams - Create new stream
  */
-streamRoutes.post('/', async (req: Request, res: Response) => {
+streamRoutes.post('/', validate(CreateStreamSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { scenario } = req.body;
     const profileId = getProfileId(req);
-
-    if (!scenario || !['pet', 'baby', 'elderly'].includes(scenario)) {
-      return res.status(400).json({ error: 'Invalid scenario' });
-    }
 
     const id = generateId();
     const timestamp = now();
@@ -113,7 +111,7 @@ streamRoutes.post('/', async (req: Request, res: Response) => {
 /**
  * PATCH /api/streams/:id - Update stream
  */
-streamRoutes.patch('/:id', async (req: Request, res: Response) => {
+streamRoutes.patch('/:id', validate(UpdateStreamSchema), async (req: Request, res: Response) => {
   try {
     const db = await getSafeOSDatabase();
     const { id } = req.params;
@@ -124,7 +122,7 @@ streamRoutes.patch('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Stream not found' });
     }
 
-    if (status && ['active', 'paused', 'ended', 'banned'].includes(status)) {
+    if (status) {
       const updates: any = { status };
       if (status === 'ended') {
         updates.ended_at = now();

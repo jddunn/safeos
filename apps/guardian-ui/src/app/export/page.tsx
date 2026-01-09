@@ -13,6 +13,10 @@ import Link from 'next/link';
 import { useAuthStore } from '../../stores/auth-store';
 import { useToast } from '../../components/Toast';
 
+// Prevent static generation (requires ToastProvider at runtime)
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -77,7 +81,7 @@ const EXPORT_OPTIONS: ExportOption[] = [
 export default function ExportPage() {
   const { sessionToken, isAuthenticated, isInitialized } = useAuthStore();
   const { success, error: showError, info } = useToast();
-  
+
   const [selectedType, setSelectedType] = useState<ExportType>('alerts');
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('json');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -185,11 +189,10 @@ export default function ExportPage() {
                     setSelectedFormat(option.formats[0]);
                   }
                 }}
-                className={`p-4 rounded-lg border text-left transition-colors ${
-                  selectedType === option.id
-                    ? 'bg-emerald-500/20 border-emerald-500/50'
-                    : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
-                }`}
+                className={`p-4 rounded-lg border text-left transition-colors ${selectedType === option.id
+                  ? 'bg-emerald-500/20 border-emerald-500/50'
+                  : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
+                  }`}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-2xl">{option.icon}</span>
@@ -204,7 +207,7 @@ export default function ExportPage() {
         {/* Format & Options */}
         <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Export Options</h2>
-          
+
           <div className="grid sm:grid-cols-2 gap-4">
             {/* Format */}
             <div>
@@ -214,11 +217,10 @@ export default function ExportPage() {
                   <button
                     key={format}
                     onClick={() => setSelectedFormat(format)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      selectedFormat === format
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedFormat === format
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
                   >
                     {format.toUpperCase()}
                   </button>
@@ -285,8 +287,8 @@ export default function ExportPage() {
             <div>
               <h3 className="font-medium text-blue-300 mb-1">Your Data, Your Control</h3>
               <p className="text-sm text-slate-400">
-                Exports include all data associated with your account. The "Full Data Export" 
-                option provides a complete download of all your information as required by 
+                Exports include all data associated with your account. The "Full Data Export"
+                option provides a complete download of all your information as required by
                 GDPR and CCPA regulations.
               </p>
             </div>

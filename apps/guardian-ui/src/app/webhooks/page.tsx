@@ -14,6 +14,10 @@ import { useAuthStore } from '../../stores/auth-store';
 import { useToast } from '../../components/Toast';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
+// Prevent static generation (requires ToastProvider at runtime)
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -45,12 +49,12 @@ const AVAILABLE_EVENTS = [
 export default function WebhooksPage() {
   const { sessionToken, isAuthenticated, isInitialized } = useAuthStore();
   const { success, error: showError, info } = useToast();
-  
+
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  
+
   // Form state
   const [newWebhook, setNewWebhook] = useState({
     name: '',
@@ -84,7 +88,7 @@ export default function WebhooksPage() {
 
   const createWebhook = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newWebhook.name || !newWebhook.url || newWebhook.events.length === 0) {
       showError('Please fill in all required fields');
       return;
@@ -269,11 +273,10 @@ export default function WebhooksPage() {
                       {AVAILABLE_EVENTS.map((event) => (
                         <label
                           key={event.id}
-                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                            newWebhook.events.includes(event.id)
+                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${newWebhook.events.includes(event.id)
                               ? 'bg-emerald-500/20 border-emerald-500/50'
                               : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
-                          }`}
+                            }`}
                         >
                           <input
                             type="checkbox"

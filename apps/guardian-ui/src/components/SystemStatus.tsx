@@ -22,6 +22,14 @@ interface SystemStats {
   ollamaStatus: 'online' | 'offline';
   analysisQueueSize: number;
   cloudFallbackRate: number;
+  // Extended stats
+  framesAnalyzedToday?: number;
+  alertsToday?: number;
+  avgResponseTime?: number;
+  memoryUsage?: number;
+  gpuUsage?: number;
+  storageUsed?: number;
+  storageTotal?: number;
 }
 
 interface OllamaModel {
@@ -172,9 +180,9 @@ export function SystemStatus({ stats }: SystemStatusProps) {
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
               Resource Usage
             </h4>
-            <ResourceBar label="Memory" value={65} max={100} unit="%" />
-            <ResourceBar label="GPU" value={45} max={100} unit="%" />
-            <ResourceBar label="Storage" value={2.3} max={16} unit="GB" />
+            <ResourceBar label="Memory" value={stats.memoryUsage ?? 0} max={100} unit="%" />
+            <ResourceBar label="GPU" value={stats.gpuUsage ?? 0} max={100} unit="%" />
+            <ResourceBar label="Storage" value={stats.storageUsed ?? 0} max={stats.storageTotal ?? 16} unit="GB" />
           </div>
 
           {/* Analysis Stats */}
@@ -184,19 +192,27 @@ export function SystemStatus({ stats }: SystemStatusProps) {
             </h4>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="bg-slate-700/50 rounded-lg p-2">
-                <div className="text-lg font-bold text-white">0</div>
+                <div className="text-lg font-bold text-white">
+                  {formatNumber(stats.framesAnalyzedToday ?? 0)}
+                </div>
                 <div className="text-xs text-slate-400">Frames Analyzed</div>
               </div>
               <div className="bg-slate-700/50 rounded-lg p-2">
-                <div className="text-lg font-bold text-white">0</div>
+                <div className="text-lg font-bold text-white">
+                  {stats.alertsToday ?? 0}
+                </div>
                 <div className="text-xs text-slate-400">Alerts Generated</div>
               </div>
               <div className="bg-slate-700/50 rounded-lg p-2">
-                <div className="text-lg font-bold text-white">0ms</div>
+                <div className="text-lg font-bold text-white">
+                  {stats.avgResponseTime ?? 0}ms
+                </div>
                 <div className="text-xs text-slate-400">Avg Response</div>
               </div>
               <div className="bg-slate-700/50 rounded-lg p-2">
-                <div className="text-lg font-bold text-white">100%</div>
+                <div className="text-lg font-bold text-white">
+                  {(100 - (stats.cloudFallbackRate ?? 0)).toFixed(0)}%
+                </div>
                 <div className="text-xs text-slate-400">Local Processing</div>
               </div>
             </div>
@@ -205,6 +221,16 @@ export function SystemStatus({ stats }: SystemStatusProps) {
       )}
     </div>
   );
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+function formatNumber(num: number): string {
+  if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+  return num.toString();
 }
 
 // =============================================================================

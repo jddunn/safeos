@@ -164,21 +164,19 @@ export default function HistoryPage() {
           <div className="flex bg-slate-800 rounded-lg p-1">
             <button
               onClick={() => setViewMode('alerts')}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                viewMode === 'alerts'
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'alerts'
                   ? 'bg-slate-700 text-white'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               Alerts
             </button>
             <button
               onClick={() => setViewMode('analysis')}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                viewMode === 'analysis'
+              className={`px-4 py-2 rounded-md transition-colors ${viewMode === 'analysis'
                   ? 'bg-slate-700 text-white'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               Analysis Results
             </button>
@@ -232,10 +230,31 @@ export default function HistoryPage() {
             ) : (
               filteredAlerts.map((alert) => {
                 const colors = severityColors[alert.severity];
+
+                const handleAcknowledge = async () => {
+                  try {
+                    await fetch(`/api/alerts/${alert.id}/acknowledge`, { method: 'POST' });
+                    setAlerts(prev => prev.map(a =>
+                      a.id === alert.id ? { ...a, acknowledged: true, acknowledged_at: new Date().toISOString() } : a
+                    ));
+                  } catch (err) {
+                    console.error('Failed to acknowledge:', err);
+                  }
+                };
+
+                const handleDelete = async () => {
+                  try {
+                    await fetch(`/api/alerts/${alert.id}`, { method: 'DELETE' });
+                    setAlerts(prev => prev.filter(a => a.id !== alert.id));
+                  } catch (err) {
+                    console.error('Failed to delete:', err);
+                  }
+                };
+
                 return (
                   <div
                     key={alert.id}
-                    className={`p-4 rounded-xl border ${colors.border} ${colors.bg}`}
+                    className={`p-4 rounded-xl border ${colors.border} ${colors.bg} group`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -254,6 +273,25 @@ export default function HistoryPage() {
                             </span>
                           )}
                         </p>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {!alert.acknowledged && (
+                          <button
+                            onClick={handleAcknowledge}
+                            className="px-3 py-1.5 text-xs font-medium bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors"
+                          >
+                            Acknowledge
+                          </button>
+                        )}
+                        <button
+                          onClick={handleDelete}
+                          className="p-1.5 rounded hover:bg-slate-700 text-slate-500 hover:text-red-400 transition-colors"
+                          title="Delete alert"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   </div>

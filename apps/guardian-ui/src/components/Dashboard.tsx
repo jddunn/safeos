@@ -496,6 +496,7 @@ interface Alert {
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
   createdAt?: string;
   timestamp?: string;
+  acknowledged?: boolean;
 }
 
 interface RecentAlertsPanelProps {
@@ -560,19 +561,29 @@ function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
             {alerts.map((alert) => (
               <div
                 key={alert.id}
-                onClick={() => handleAcknowledge(alert.id)}
-                className="group flex items-start gap-3 p-2 rounded bg-[var(--color-steel-850)] border border-[var(--color-steel-800)] hover:border-[var(--color-steel-600)] cursor-pointer transition-colors"
+                onClick={() => !alert.acknowledged && handleAcknowledge(alert.id)}
+                className={`group flex items-start gap-3 p-2 rounded border transition-colors ${alert.acknowledged
+                    ? 'bg-[var(--color-steel-900)] border-[var(--color-steel-800)] opacity-60'
+                    : 'bg-[var(--color-steel-850)] border-[var(--color-steel-800)] hover:border-[var(--color-steel-600)] cursor-pointer'
+                  }`}
               >
-                <IconAlertTriangle
-                  size={16}
-                  className={`mt-0.5 flex-shrink-0 ${severityColors[alert.severity]}`}
-                />
+                {alert.acknowledged ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 flex-shrink-0 text-emerald-500">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <IconAlertTriangle
+                    size={16}
+                    className={`mt-0.5 flex-shrink-0 ${severityColors[alert.severity]}`}
+                  />
+                )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[var(--color-steel-200)] truncate">
+                  <p className={`text-sm truncate ${alert.acknowledged ? 'text-[var(--color-steel-400)]' : 'text-[var(--color-steel-200)]'}`}>
                     {alert.message}
                   </p>
                   <p className="font-mono text-xs text-[var(--color-steel-500)]">
                     {new Date(alert.createdAt || alert.timestamp || new Date()).toLocaleTimeString()}
+                    {alert.acknowledged && <span className="ml-2 text-emerald-500">✓ Acknowledged</span>}
                   </p>
                 </div>
                 <button

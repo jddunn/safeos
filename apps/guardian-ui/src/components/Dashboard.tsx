@@ -228,13 +228,12 @@ function Header({ isConnected, systemHealth }: HeaderProps) {
             {/* System Health */}
             <div className="flex items-center gap-2">
               <div
-                className={`status-dot ${
-                  systemHealth === 'healthy'
-                    ? 'status-dot--online'
-                    : systemHealth === 'degraded'
+                className={`status-dot ${systemHealth === 'healthy'
+                  ? 'status-dot--online'
+                  : systemHealth === 'degraded'
                     ? 'status-dot--warning'
                     : 'status-dot--offline'
-                } ${systemHealth === 'healthy' ? 'status-dot--pulse' : ''}`}
+                  } ${systemHealth === 'healthy' ? 'status-dot--pulse' : ''}`}
               />
               <span className="font-mono text-xs text-[var(--color-steel-400)] uppercase">
                 {systemHealth}
@@ -282,6 +281,14 @@ function StatCard({ label, value, icon, status = 'inactive' }: StatCardProps) {
 // Quick Actions Panel
 // =============================================================================
 
+function MoonIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+    </svg>
+  );
+}
+
 interface QuickActionsPanelProps {
   isStreaming: boolean;
 }
@@ -295,6 +302,14 @@ function QuickActionsPanel({ isStreaming }: QuickActionsPanelProps) {
       href: '/monitor',
       icon: <IconPlay size={20} />,
       primary: true,
+    },
+    {
+      id: 'nap',
+      label: 'Nap Mode',
+      description: 'Quick nap monitoring',
+      href: '/nap',
+      icon: <MoonIcon size={20} />,
+      highlight: true,
     },
     {
       id: 'history',
@@ -323,18 +338,16 @@ function QuickActionsPanel({ isStreaming }: QuickActionsPanelProps) {
             <Link
               key={action.id}
               href={action.href}
-              className={`card flex items-center gap-3 transition-colors hover:border-[var(--color-steel-500)] ${
-                action.primary
-                  ? 'border-[var(--color-accent-700)] bg-[var(--color-accent-900)]/30'
-                  : ''
-              }`}
+              className={`card flex items-center gap-3 transition-colors hover:border-[var(--color-steel-500)] ${action.primary
+                ? 'border-[var(--color-accent-700)] bg-[var(--color-accent-900)]/30'
+                : ''
+                }`}
             >
               <div
-                className={`w-10 h-10 rounded flex items-center justify-center ${
-                  action.primary
-                    ? 'bg-[var(--color-accent-600)] text-white'
-                    : 'bg-[var(--color-steel-800)] text-[var(--color-steel-400)]'
-                }`}
+                className={`w-10 h-10 rounded flex items-center justify-center ${action.primary
+                  ? 'bg-[var(--color-accent-600)] text-white'
+                  : 'bg-[var(--color-steel-800)] text-[var(--color-steel-400)]'
+                  }`}
               >
                 {action.icon}
               </div>
@@ -430,9 +443,8 @@ function SystemStatusPanel({ stats }: SystemStatusPanelProps) {
           </div>
           <div className="flex items-center gap-2">
             <div
-              className={`status-dot ${
-                stats.ollamaStatus === 'online' ? 'status-dot--online' : 'status-dot--offline'
-              }`}
+              className={`status-dot ${stats.ollamaStatus === 'online' ? 'status-dot--online' : 'status-dot--offline'
+                }`}
             />
             <span className="font-mono text-xs text-[var(--color-steel-400)] uppercase">
               {stats.ollamaStatus}
@@ -491,12 +503,25 @@ interface RecentAlertsPanelProps {
 }
 
 function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
+  const removeAlert = useMonitoringStore((state) => state.removeAlert);
+  const acknowledgeAlert = useMonitoringStore((state) => state.acknowledgeAlert);
+  const clearAlerts = useMonitoringStore((state) => state.clearAlerts);
+
   const severityColors = {
     critical: 'text-[var(--color-alert-critical)]',
     high: 'text-[var(--color-alert-high)]',
     medium: 'text-[var(--color-alert-medium)]',
     low: 'text-[var(--color-alert-low)]',
     info: 'text-[var(--color-steel-500)]',
+  };
+
+  const handleDismiss = (e: React.MouseEvent, alertId: string) => {
+    e.stopPropagation();
+    removeAlert(alertId);
+  };
+
+  const handleAcknowledge = (alertId: string) => {
+    acknowledgeAlert(alertId);
   };
 
   return (
@@ -506,12 +531,23 @@ function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
           <IconAlertTriangle size={16} className="text-[var(--color-steel-500)]" />
           Recent Alerts
         </h2>
-        <Link
-          href="/history"
-          className="font-mono text-xs text-[var(--color-accent-500)] hover:text-[var(--color-accent-400)]"
-        >
-          VIEW ALL
-        </Link>
+        <div className="flex items-center gap-2">
+          {alerts.length > 0 && (
+            <button
+              onClick={clearAlerts}
+              className="font-mono text-xs text-[var(--color-steel-500)] hover:text-[var(--color-steel-300)] transition-colors"
+              title="Clear all alerts"
+            >
+              CLEAR ALL
+            </button>
+          )}
+          <Link
+            href="/history"
+            className="font-mono text-xs text-[var(--color-accent-500)] hover:text-[var(--color-accent-400)]"
+          >
+            VIEW ALL
+          </Link>
+        </div>
       </div>
       <div className="panel-body">
         {alerts.length === 0 ? (
@@ -520,11 +556,12 @@ function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
             <p className="font-mono text-xs">No recent alerts</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {alerts.map((alert) => (
               <div
                 key={alert.id}
-                className="flex items-start gap-3 p-2 rounded bg-[var(--color-steel-850)] border border-[var(--color-steel-800)]"
+                onClick={() => handleAcknowledge(alert.id)}
+                className="group flex items-start gap-3 p-2 rounded bg-[var(--color-steel-850)] border border-[var(--color-steel-800)] hover:border-[var(--color-steel-600)] cursor-pointer transition-colors"
               >
                 <IconAlertTriangle
                   size={16}
@@ -538,6 +575,15 @@ function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
                     {new Date(alert.createdAt || alert.timestamp || new Date()).toLocaleTimeString()}
                   </p>
                 </div>
+                <button
+                  onClick={(e) => handleDismiss(e, alert.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--color-steel-700)] text-[var(--color-steel-500)] hover:text-white transition-all"
+                  title="Dismiss alert"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             ))}
           </div>

@@ -18,7 +18,7 @@ import {
   getProcessingModeInfo,
   type SecurityPreset,
 } from '../stores/settings-store';
-import { IconClose, IconInfo, IconShield, IconCamera, IconBell } from './icons';
+import { IconX, IconInfo, IconShield, IconCamera, IconBell } from './icons';
 
 // =============================================================================
 // Types
@@ -189,7 +189,7 @@ export function PresetInfoModal({ isOpen, onClose }: PresetInfoModalProps) {
                        hover:bg-[var(--color-steel-800)] rounded-lg transition-colors"
             aria-label="Close modal"
           >
-            <IconClose size={20} />
+            <IconX size={20} />
           </button>
         </div>
 

@@ -12,7 +12,7 @@
 
 'use client';
 
-import { pipeline, env, type Pipeline } from '@xenova/transformers';
+import { pipeline, env } from '@xenova/transformers';
 import { saveSetting, getSetting } from './client-db';
 
 // =============================================================================
@@ -177,8 +177,14 @@ const SUGGESTED_ACTIONS: Record<ConcernLevel, string> = {
 // Browser Vision Analyzer Class
 // =============================================================================
 
+// Image classification pipeline type (more permissive than base Pipeline)
+type ImageClassifier = (
+  input: HTMLCanvasElement | HTMLImageElement | HTMLVideoElement | ImageData | string,
+  options?: { topk?: number }
+) => Promise<ClassificationResult[]>;
+
 class BrowserVisionAnalyzer {
-  private classifier: Pipeline | null = null;
+  private classifier: ImageClassifier | null = null;
   private config: BrowserVisionConfig = DEFAULT_CONFIG;
   private modelProgress: ModelProgress = {
     status: 'idle',
@@ -235,7 +241,7 @@ class BrowserVisionAnalyzer {
             });
           },
         }
-      );
+      ) as unknown as ImageClassifier;
 
       this.updateProgress({ status: 'ready', progress: 100 });
       this.initialized = true;

@@ -15,7 +15,6 @@ import { useToast } from '../../components/Toast';
 
 // Prevent static generation (requires ToastProvider at runtime)
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 // =============================================================================
 // Types

@@ -16,7 +16,6 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 // Prevent static generation (requires ToastProvider at runtime)
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 // =============================================================================
 // Types
@@ -274,8 +273,8 @@ export default function WebhooksPage() {
                         <label
                           key={event.id}
                           className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${newWebhook.events.includes(event.id)
-                              ? 'bg-emerald-500/20 border-emerald-500/50'
-                              : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
+                            ? 'bg-emerald-500/20 border-emerald-500/50'
+                            : 'bg-slate-700/50 border-slate-600 hover:border-slate-500'
                             }`}
                         >
                           <input

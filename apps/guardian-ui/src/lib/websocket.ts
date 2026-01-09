@@ -76,6 +76,11 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
         reconnectAttemptsRef.current = 0;
         onConnect?.();
 
+        // Clear any existing heartbeat before starting new one
+        if (heartbeatRef.current) {
+          clearInterval(heartbeatRef.current);
+        }
+
         // Start heartbeat
         heartbeatRef.current = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -240,6 +245,11 @@ export class WebSocketClient {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       this.onConnectCallback?.();
+
+      // Clear any existing heartbeat before starting new one
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+      }
 
       this.heartbeatInterval = setInterval(() => {
         this.send({ type: 'ping' });

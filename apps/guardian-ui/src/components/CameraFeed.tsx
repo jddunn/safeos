@@ -10,7 +10,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { detectMotion, MOTION_THRESHOLDS, getThresholdForScenario } from '../lib/motion-detection';
-import { getAudioLevel, detectCryingPattern, AUDIO_THRESHOLDS } from '../lib/audio-levels';
+import { getAudioLevel, detectCryingPattern, resetCryDetection, AUDIO_THRESHOLDS } from '../lib/audio-levels';
 
 // =============================================================================
 // Types
@@ -63,6 +63,16 @@ export function CameraFeed({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Refs for callbacks to avoid recreating intervals
+  const onMotionRef = useRef(onMotion);
+  const onAudioRef = useRef(onAudio);
+  const onFrameRef = useRef(onFrame);
+
+  // Keep refs up to date
+  useEffect(() => { onMotionRef.current = onMotion; }, [onMotion]);
+  useEffect(() => { onAudioRef.current = onAudio; }, [onAudio]);
+  useEffect(() => { onFrameRef.current = onFrame; }, [onFrame]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +135,8 @@ export function CameraFeed({
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
+    // Reset cry detection buffer to prevent memory leak
+    resetCryDetection();
     setCameraActive(false);
   }, []);
 
@@ -162,7 +174,7 @@ export function CameraFeed({
         const score = detectMotion(previousFrameRef.current, currentFrame);
         const motionPercent = Math.round(score * 100);
         setMotionScore(motionPercent);
-        onMotion?.(motionPercent);
+        onMotionRef.current?.(motionPercent);
       }
 
       // Store current frame for next comparison
@@ -182,7 +194,7 @@ export function CameraFeed({
       const level = getAudioLevel(analyserRef.current);
       const audioPercent = Math.round(level * 100);
       setAudioLevel(audioPercent);
-      onAudio?.(audioPercent);
+      onAudioRef.current?.(audioPercent);
 
       // Detect crying for baby monitoring
       if (scenario === 'baby' && analyserRef.current) {
@@ -205,9 +217,9 @@ export function CameraFeed({
       }
 
       // Capture and send frame
-      if (canvasRef.current && onFrame) {
+      if (canvasRef.current && onFrameRef.current) {
         const imageData = canvasRef.current.toDataURL('image/jpeg', 0.7);
-        onFrame({
+        onFrameRef.current({
           imageData,
           motionScore,
           audioLevel,
@@ -218,7 +230,7 @@ export function CameraFeed({
     }, FRAME_INTERVAL);
 
     return () => clearInterval(interval);
-  }, [cameraActive, motionScore, audioLevel, motionThreshold, audioThreshold, hasCrying, onFrame]);
+  }, [cameraActive, motionScore, audioLevel, motionThreshold, audioThreshold, hasCrying]);
 
   return (
     <div className="relative w-full aspect-video bg-slate-900 rounded-xl overflow-hidden">

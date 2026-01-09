@@ -32,22 +32,52 @@ const RETRY_DELAYS = [1000, 5000, 15000, 30000, 60000]; // Progressive backoff
 let syncInterval: NodeJS.Timeout | null = null;
 let isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 let isSyncing = false;
+let isInitialized = false;
 
 // =============================================================================
-// Event Listeners
+// Event Handlers (named for proper cleanup)
 // =============================================================================
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    console.log('[Sync] Back online');
-    isOnline = true;
-    syncPendingActions();
-  });
+function handleOnline(): void {
+  console.log('[Sync] Back online');
+  isOnline = true;
+  syncPendingActions();
+}
 
-  window.addEventListener('offline', () => {
-    console.log('[Sync] Went offline');
-    isOnline = false;
-  });
+function handleOffline(): void {
+  console.log('[Sync] Went offline');
+  isOnline = false;
+}
+
+// =============================================================================
+// Initialization & Cleanup
+// =============================================================================
+
+/**
+ * Initialize sync service - call once on app mount
+ */
+export function initSyncService(): void {
+  if (isInitialized || typeof window === 'undefined') return;
+
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+  isInitialized = true;
+
+  console.log('[Sync] Service initialized');
+}
+
+/**
+ * Cleanup sync service - call on app unmount
+ */
+export function cleanupSyncService(): void {
+  if (!isInitialized || typeof window === 'undefined') return;
+
+  window.removeEventListener('online', handleOnline);
+  window.removeEventListener('offline', handleOffline);
+  stopPeriodicSync();
+  isInitialized = false;
+
+  console.log('[Sync] Service cleaned up');
 }
 
 // =============================================================================

@@ -25,6 +25,21 @@ const nextConfig = {
       crypto: false,
     };
 
+    // Exclude native node modules from browser bundle
+    // Transformers.js will use onnxruntime-web automatically
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'onnxruntime-node$': 'onnxruntime-web',
+    };
+
+    // Externalize sharp (used by some transformers pipelines)
+    config.externals = config.externals || [];
+    if (!isServer) {
+      config.externals.push({
+        sharp: 'commonjs sharp',
+      });
+    }
+
     // Ensure .wasm files are handled correctly
     config.module.rules.push({
       test: /\.wasm$/,

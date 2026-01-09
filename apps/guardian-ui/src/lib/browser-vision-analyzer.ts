@@ -22,6 +22,8 @@ import { saveSetting, getSetting } from './client-db';
 // Configure Transformers.js for browser environment
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+// Force use of onnxruntime-web instead of onnxruntime-node
+env.backends.onnx.wasm.proxy = true;
 
 // =============================================================================
 // Types

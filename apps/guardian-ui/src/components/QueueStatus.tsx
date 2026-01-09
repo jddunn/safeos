@@ -211,9 +211,9 @@ function RequestCard({ request, onCancel }: RequestCardProps) {
           <button
             onClick={onCancel}
             className="p-1 text-slate-400 hover:text-red-400 transition-colors"
-            title="Cancel request"
+            aria-label="Cancel request"
           >
-            <IconX size={14} />
+            <IconX size={14} aria-hidden="true" />
           </button>
         )}
       </div>

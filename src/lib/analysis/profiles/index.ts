@@ -50,3 +50,15 @@ export function getProfile(scenario: MonitoringScenario): MonitoringProfile {
 export function getAllProfiles(): MonitoringProfile[] {
   return Object.values(profiles);
 }
+
+export function getPetPrompt(type: 'triage' | 'detailed'): string {
+  return type === 'triage' ? petProfile.triagePrompt : petProfile.analysisPrompt;
+}
+
+export function getBabyPrompt(type: 'triage' | 'detailed'): string {
+  return type === 'triage' ? babyProfile.triagePrompt : babyProfile.analysisPrompt;
+}
+
+export function getElderlyPrompt(type: 'triage' | 'detailed'): string {
+  return type === 'triage' ? elderlyProfile.triagePrompt : elderlyProfile.analysisPrompt;
+}

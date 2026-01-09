@@ -136,8 +136,8 @@ export default function HistoryPage() {
       <header className="p-4 sm:p-6 border-b border-slate-700/50">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors" aria-label="Go back to dashboard">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
@@ -286,9 +286,9 @@ export default function HistoryPage() {
                         <button
                           onClick={handleDelete}
                           className="p-1.5 rounded hover:bg-slate-700 text-slate-500 hover:text-red-400 transition-colors"
-                          title="Delete alert"
+                          aria-label="Delete alert"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                             <path d="M18 6L6 18M6 6l12 12" />
                           </svg>
                         </button>

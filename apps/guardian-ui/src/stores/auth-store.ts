@@ -48,6 +48,9 @@ export interface NotificationSettings {
   quietHoursEnd: string | null;
 }
 
+/** Session mode - 'full' when connected to backend, 'local-only' otherwise */
+export type SessionMode = 'full' | 'local-only';
+
 interface AuthState {
   // State
   isInitialized: boolean;
@@ -61,6 +64,10 @@ interface AuthState {
   profile: UserProfile | null;
   user: { id: string; displayName: string; preferences: UserPreferences } | null; // Simple user object
   expiresAt: string | null;
+  /** Current session mode - 'full' or 'local-only' */
+  mode: SessionMode;
+  /** Whether we're operating offline (no network) */
+  isOffline: boolean;
 
   // Actions
   initialize: () => Promise<void>;
@@ -122,6 +129,8 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       user: null,
       expiresAt: null,
+      mode: 'local-only',
+      isOffline: false,
 
       // Initialize from local storage
       initialize: async () => {
@@ -155,6 +164,8 @@ export const useAuthStore = create<AuthState>()(
                   sessionId: data.sessionId,
                   profile: data.profile,
                   expiresAt: data.expiresAt,
+                  mode: 'full',
+                  isOffline: false,
                   isInitialized: true,
                   isLoading: false,
                 });
@@ -170,6 +181,8 @@ export const useAuthStore = create<AuthState>()(
                 sessionId: localSession.id,
                 profile: localSession.profile,
                 expiresAt: localSession.expiresAt,
+                mode: 'local-only',
+                isOffline: true,
                 isInitialized: true,
                 isLoading: false,
               });
@@ -233,6 +246,8 @@ export const useAuthStore = create<AuthState>()(
             deviceId,
             profile: data.profile,
             expiresAt: data.expiresAt,
+            mode: 'full',
+            isOffline: false,
             isInitialized: true,
             isLoading: false,
           });
@@ -264,15 +279,31 @@ export const useAuthStore = create<AuthState>()(
             updatedAt: new Date().toISOString(),
           };
 
+          // Cache profile
           await cacheProfile(guestProfile);
+
+          // Save local session to IndexedDB for persistence
+          const localToken = `local-${guestId}`;
+          const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(); // 1 year
+          await saveLocalSession({
+            id: guestId,
+            token: localToken,
+            deviceId: get().deviceId || generateDeviceId(),
+            profile: guestProfile,
+            createdAt: new Date().toISOString(),
+            expiresAt,
+            syncedAt: new Date().toISOString(),
+          });
 
           set({
             isAuthenticated: true,
             isGuest: true,
-            sessionToken: `offline-${guestId}`,
+            sessionToken: localToken,
             sessionId: guestId,
             profile: guestProfile,
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            expiresAt,
+            mode: 'local-only',
+            isOffline: true,
             isInitialized: true,
             isLoading: false,
           });
@@ -316,7 +347,7 @@ export const useAuthStore = create<AuthState>()(
         set({ profile: updatedProfile });
 
         try {
-          if (token && !token.startsWith('offline-')) {
+          if (token && !token.startsWith('local-') && !token.startsWith('offline-')) {
             await fetch(`${API_URL}/api/auth/profile`, {
               method: 'PATCH',
               headers: {
@@ -360,7 +391,7 @@ export const useAuthStore = create<AuthState>()(
         const token = get().sessionToken;
 
         try {
-          if (token && !token.startsWith('offline-')) {
+          if (token && !token.startsWith('local-') && !token.startsWith('offline-')) {
             await fetch(`${API_URL}/api/auth/session`, {
               method: 'DELETE',
               headers: {

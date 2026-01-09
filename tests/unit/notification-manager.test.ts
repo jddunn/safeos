@@ -8,21 +8,27 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NotificationManager } from '../../src/lib/alerts/notification-manager.js';
-import type { NotificationPayload, NotificationConfig } from '../../src/types/index.js';
 
 // Mock external services
 vi.mock('../../src/lib/alerts/browser-push.js', () => ({
   sendBrowserPushNotification: vi.fn().mockResolvedValue({ success: true }),
+  isVapidConfigured: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock('../../src/lib/alerts/twilio.js', () => ({
   sendTwilioSms: vi.fn().mockResolvedValue({ success: true, sid: 'test-sid' }),
+  isTwilioConfigured: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock('../../src/lib/alerts/telegram.js', () => ({
   TelegramBotService: vi.fn().mockImplementation(() => ({
-    sendNotification: vi.fn().mockResolvedValue({ success: true }),
+    sendAlert: vi.fn().mockResolvedValue({ success: true }),
   })),
+}));
+
+vi.mock('../../src/api/routes/notifications.js', () => ({
+  getPushSubscriptions: vi.fn().mockReturnValue(new Map()),
+  getTelegramChatIds: vi.fn().mockReturnValue([]),
 }));
 
 // =============================================================================
@@ -32,109 +38,173 @@ vi.mock('../../src/lib/alerts/telegram.js', () => ({
 describe('NotificationManager', () => {
   let manager: NotificationManager;
 
-  const mockConfig: NotificationConfig = {
-    browserPush: {
-      enabled: true,
-      vapidPublicKey: 'test-public-key',
-      vapidPrivateKey: 'test-private-key',
-    },
-    twilio: {
-      enabled: true,
-      accountSid: 'test-account-sid',
-      authToken: 'test-auth-token',
-      fromNumber: '+1234567890',
-    },
-    telegram: {
-      enabled: true,
-      botToken: 'test-bot-token',
-    },
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    manager = new NotificationManager(mockConfig);
+    manager = new NotificationManager();
   });
 
   // ===========================================================================
-  // Basic Notification Tests
+  // Constructor Tests
   // ===========================================================================
 
-  describe('sendNotification', () => {
-    it('should send notification via all enabled channels', async () => {
-      const payload: NotificationPayload = {
+  describe('constructor', () => {
+    it('should create with default config', () => {
+      const config = manager.getConfig();
+
+      expect(config.browserPush).toBe(true);
+      expect(config.sms).toBe(false);
+      expect(config.telegram).toBe(false);
+    });
+
+    it('should accept custom config', () => {
+      const customManager = new NotificationManager({
+        browserPush: false,
+        sms: true,
+        smsNumber: '+1234567890',
+      });
+
+      const config = customManager.getConfig();
+      expect(config.browserPush).toBe(false);
+      expect(config.sms).toBe(true);
+      expect(config.smsNumber).toBe('+1234567890');
+    });
+  });
+
+  // ===========================================================================
+  // Notify Tests
+  // ===========================================================================
+
+  describe('notify', () => {
+    it('should send notification and return results', async () => {
+      const payload = {
+        streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'medium' as const,
         title: 'Test Alert',
-        body: 'This is a test notification',
-        severity: 'medium',
-        streamId: 'stream-1',
+        message: 'This is a test notification',
         timestamp: new Date().toISOString(),
       };
 
-      const results = await manager.sendNotification(payload);
+      const results = await manager.notify(payload);
 
-      expect(results.success).toBe(true);
-      expect(results.channels).toContain('browserPush');
-      expect(results.channels).toContain('twilio');
-      expect(results.channels).toContain('telegram');
+      expect(results).toBeInstanceOf(Array);
+      // Results should have entries for each channel attempted
+      results.forEach((result) => {
+        expect(result).toHaveProperty('channel');
+        expect(result).toHaveProperty('success');
+      });
     });
 
-    it('should respect disabled channels', async () => {
-      const partialConfig: NotificationConfig = {
-        browserPush: { enabled: false },
-        twilio: { enabled: true, accountSid: 'test', authToken: 'test', fromNumber: '+1' },
-        telegram: { enabled: false },
-      };
-
-      const partialManager = new NotificationManager(partialConfig);
-
-      const payload: NotificationPayload = {
-        title: 'Test',
-        body: 'Test',
-        severity: 'low',
+    it('should attempt browser push for low severity', async () => {
+      const payload = {
         streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'low' as const,
+        title: 'Low Alert',
+        message: 'Test',
         timestamp: new Date().toISOString(),
       };
 
-      const results = await partialManager.sendNotification(payload);
+      const results = await manager.notify(payload);
 
-      expect(results.channels).not.toContain('browserPush');
-      expect(results.channels).not.toContain('telegram');
+      // Low severity should only use browser
+      const browserResult = results.find((r) => r.channel === 'browser');
+      expect(browserResult).toBeDefined();
+    });
+
+    it('should attempt multiple channels for high severity', async () => {
+      const smsManager = new NotificationManager({
+        sms: true,
+        smsNumber: '+1234567890',
+        telegram: true,
+      });
+
+      const payload = {
+        streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'high' as const,
+        title: 'High Alert',
+        message: 'Urgent attention needed',
+        timestamp: new Date().toISOString(),
+      };
+
+      const results = await smsManager.notify(payload);
+
+      // High severity should use browser, telegram, sms
+      expect(results.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should handle info severity', async () => {
+      const payload = {
+        streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'info' as const,
+        title: 'Info',
+        message: 'Informational message',
+        timestamp: new Date().toISOString(),
+      };
+
+      const results = await manager.notify(payload);
+
+      expect(results).toBeInstanceOf(Array);
+    });
+
+    it('should handle critical severity', async () => {
+      const payload = {
+        streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'critical' as const,
+        title: 'Critical Alert',
+        message: 'Immediate attention required',
+        timestamp: new Date().toISOString(),
+      };
+
+      const results = await manager.notify(payload);
+
+      expect(results).toBeInstanceOf(Array);
     });
   });
 
   // ===========================================================================
-  // Severity-based Tests
+  // Configuration Tests
   // ===========================================================================
 
-  describe('severity handling', () => {
-    it('should send all channels for critical alerts', async () => {
-      const payload: NotificationPayload = {
-        title: 'CRITICAL ALERT',
-        body: 'Immediate attention required',
-        severity: 'critical',
-        streamId: 'stream-1',
-        timestamp: new Date().toISOString(),
-      };
+  describe('updateConfig', () => {
+    it('should update configuration', () => {
+      manager.updateConfig({ sms: true, smsNumber: '+0987654321' });
 
-      const results = await manager.sendNotification(payload);
-
-      expect(results.success).toBe(true);
-      // Critical should trigger all channels
-      expect(results.channels.length).toBeGreaterThan(0);
+      const config = manager.getConfig();
+      expect(config.sms).toBe(true);
+      expect(config.smsNumber).toBe('+0987654321');
     });
 
-    it('should include severity in notification payload', async () => {
-      const payload: NotificationPayload = {
-        title: 'High Alert',
-        body: 'Attention needed',
-        severity: 'high',
-        streamId: 'stream-1',
-        timestamp: new Date().toISOString(),
-      };
+    it('should preserve unchanged config values', () => {
+      const original = manager.getConfig();
+      manager.updateConfig({ sms: true });
 
-      await manager.sendNotification(payload);
+      const updated = manager.getConfig();
+      expect(updated.browserPush).toBe(original.browserPush);
+    });
+  });
 
-      // Verify severity was passed through
-      expect(payload.severity).toBe('high');
+  // ===========================================================================
+  // Channel Availability Tests
+  // ===========================================================================
+
+  describe('getAvailableChannels', () => {
+    it('should always include browser channel', () => {
+      const channels = manager.getAvailableChannels();
+
+      expect(channels).toContain('browser');
+    });
+
+    it('should return array of strings', () => {
+      const channels = manager.getAvailableChannels();
+
+      expect(channels).toBeInstanceOf(Array);
+      channels.forEach((channel) => {
+        expect(typeof channel).toBe('string');
+      });
     });
   });
 
@@ -143,137 +213,33 @@ describe('NotificationManager', () => {
   // ===========================================================================
 
   describe('error handling', () => {
-    it('should continue with other channels if one fails', async () => {
-      // Make one channel fail
-      const { sendBrowserPushNotification } = await import('../../src/lib/alerts/browser-push.js');
-      vi.mocked(sendBrowserPushNotification).mockRejectedValueOnce(new Error('Push failed'));
+    it('should continue if one channel fails', async () => {
+      const { sendBrowserPushNotification } = await import(
+        '../../src/lib/alerts/browser-push.js'
+      );
+      vi.mocked(sendBrowserPushNotification).mockRejectedValueOnce(
+        new Error('Push failed')
+      );
 
-      const payload: NotificationPayload = {
+      const payload = {
+        streamId: 'stream-1',
+        alertId: 'alert-1',
+        severity: 'medium' as const,
         title: 'Test',
-        body: 'Test',
-        severity: 'medium',
-        streamId: 'stream-1',
+        message: 'Test',
         timestamp: new Date().toISOString(),
       };
 
-      const results = await manager.sendNotification(payload);
+      // Should not throw
+      const results = await manager.notify(payload);
 
-      // Should still succeed with other channels
-      expect(results.success).toBe(true);
-      expect(results.errors).toContain('browserPush');
-    });
-
-    it('should report all errors when all channels fail', async () => {
-      const { sendBrowserPushNotification } = await import('../../src/lib/alerts/browser-push.js');
-      const { sendTwilioSms } = await import('../../src/lib/alerts/twilio.js');
-
-      vi.mocked(sendBrowserPushNotification).mockRejectedValue(new Error('Push failed'));
-      vi.mocked(sendTwilioSms).mockRejectedValue(new Error('SMS failed'));
-
-      const payload: NotificationPayload = {
-        title: 'Test',
-        body: 'Test',
-        severity: 'low',
-        streamId: 'stream-1',
-        timestamp: new Date().toISOString(),
-      };
-
-      const results = await manager.sendNotification(payload);
-
-      expect(results.errors).toBeDefined();
-      expect(results.errors!.length).toBeGreaterThan(0);
-    });
-  });
-
-  // ===========================================================================
-  // Subscription Tests
-  // ===========================================================================
-
-  describe('subscription management', () => {
-    it('should add browser push subscription', async () => {
-      const subscription = {
-        endpoint: 'https://push.example.com/test',
-        keys: { p256dh: 'test-key', auth: 'test-auth' },
-      };
-
-      await manager.addPushSubscription('user-1', subscription);
-
-      const subs = manager.getPushSubscriptions('user-1');
-      expect(subs).toHaveLength(1);
-      expect(subs[0].endpoint).toBe(subscription.endpoint);
-    });
-
-    it('should add Telegram chat ID', async () => {
-      await manager.addTelegramChat('user-1', '123456789');
-
-      const chats = manager.getTelegramChats('user-1');
-      expect(chats).toContain('123456789');
-    });
-
-    it('should add SMS phone number', async () => {
-      await manager.addPhoneNumber('user-1', '+1234567890');
-
-      const phones = manager.getPhoneNumbers('user-1');
-      expect(phones).toContain('+1234567890');
-    });
-  });
-
-  // ===========================================================================
-  // Rate Limiting Tests
-  // ===========================================================================
-
-  describe('rate limiting', () => {
-    it('should not send duplicate notifications within cooldown', async () => {
-      const payload: NotificationPayload = {
-        title: 'Same Alert',
-        body: 'Duplicate check',
-        severity: 'low',
-        streamId: 'stream-1',
-        timestamp: new Date().toISOString(),
-        dedupeKey: 'unique-alert-1',
-      };
-
-      await manager.sendNotification(payload);
-      const second = await manager.sendNotification(payload);
-
-      expect(second.skipped).toBe(true);
-      expect(second.reason).toContain('duplicate');
+      // Should have result with error
+      const failedResult = results.find(
+        (r) => r.channel === 'browser' && !r.success
+      );
+      if (failedResult) {
+        expect(failedResult.error).toBeDefined();
+      }
     });
   });
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

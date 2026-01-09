@@ -285,4 +285,15 @@ export class OllamaClient {
   }
 }
 
+// Default client singleton
+let defaultClient: OllamaClient | null = null;
+
+export function getDefaultOllamaClient(): OllamaClient {
+  if (!defaultClient) {
+    const host = process.env.OLLAMA_HOST || 'http://localhost:11434';
+    defaultClient = new OllamaClient(host);
+  }
+  return defaultClient;
+}
+
 export default OllamaClient;

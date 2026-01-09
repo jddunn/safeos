@@ -51,6 +51,7 @@ export default function NapModePage() {
     const [napStartTime, setNapStartTime] = useState<Date | null>(null);
     const [elapsedMinutes, setElapsedMinutes] = useState(0);
     const [motionDetected, setMotionDetected] = useState(false);
+    const [testSoundId, setTestSoundId] = useState<string | null>(null);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,8 +71,10 @@ export default function NapModePage() {
             if (animationRef.current) {
                 cancelAnimationFrame(animationRef.current);
             }
+            // Stop any playing test sounds
+            soundManager.stopAll();
         };
-    }, []);
+    }, [soundManager]);
 
     // Elapsed time counter when nap is active
     useEffect(() => {
@@ -173,11 +176,23 @@ export default function NapModePage() {
     };
 
     const testAudio = () => {
+        // Stop any existing test sound first
+        if (testSoundId) {
+            soundManager.stop(testSoundId);
+            setTestSoundId(null);
+        }
+
         setTestStatus(prev => ({ ...prev, audio: 'testing' }));
         soundManager.updateVolume(1); // Max volume for test
-        soundManager.play('alarm');
+
+        // Use test() instead of play() - test() forces loop: false
+        const id = soundManager.test('alarm');
+        setTestSoundId(id);
 
         setTimeout(() => {
+            // Stop the test sound after 2 seconds
+            soundManager.stop(id);
+            setTestSoundId(null);
             setTestStatus(prev => ({ ...prev, audio: 'passed' }));
         }, 2000);
     };
@@ -188,6 +203,13 @@ export default function NapModePage() {
         testStatus.audio === 'passed';
 
     const activateNapMode = () => {
+        // Stop any test sounds before activating nap mode
+        if (testSoundId) {
+            soundManager.stop(testSoundId);
+            setTestSoundId(null);
+        }
+        soundManager.stopAll(); // Ensure no sounds are playing
+
         activateSleepMode('infant_sleep');
         soundManager.updateVolume(1); // Ensure max volume
         setNapStartTime(new Date());

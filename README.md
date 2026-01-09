@@ -7,6 +7,7 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
   [![Ollama](https://img.shields.io/badge/Ollama-Local%20AI-purple.svg)](https://ollama.com/)
+  [![codecov](https://codecov.io/gh/your-org/super-cloud-mcps/branch/main/graph/badge.svg?flag=safeos)](https://codecov.io/gh/your-org/super-cloud-mcps)
 </div>
 
 ---

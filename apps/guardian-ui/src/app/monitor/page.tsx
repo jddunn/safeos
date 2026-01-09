@@ -324,7 +324,9 @@ export default function MonitorPage() {
                     ? 'bg-purple-500/20 text-purple-400 border border-purple-500/50'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                 }`}
-                title="Lost & Found Mode"
+                aria-label="Lost & Found Mode"
+                aria-expanded={showLostFoundPanel}
+                aria-pressed={isLostFoundWatching}
               >
                 <IconRadar size={18} />
                 <span className="hidden sm:inline">

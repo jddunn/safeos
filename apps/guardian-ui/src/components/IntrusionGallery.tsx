@@ -147,9 +147,9 @@ function FrameCard({
                   onAcknowledge();
                 }}
                 className="p-1 text-emerald-400 hover:text-emerald-300"
-                title="Acknowledge"
+                aria-label="Acknowledge"
               >
-                <IconCheck size={14} />
+                <IconCheck size={14} aria-hidden="true" />
               </button>
             )}
             <button
@@ -158,9 +158,9 @@ function FrameCard({
                 onDelete();
               }}
               className="p-1 text-red-400 hover:text-red-300"
-              title="Delete"
+              aria-label="Delete"
             >
-              <IconTrash size={14} />
+              <IconTrash size={14} aria-hidden="true" />
             </button>
           </div>
         </div>

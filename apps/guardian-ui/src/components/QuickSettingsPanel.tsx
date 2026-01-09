@@ -10,9 +10,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSettingsStore, DEFAULT_PRESETS, PresetId } from '../stores/settings-store';
+import { useSettingsStore, DEFAULT_PRESETS, PresetId, isSleepPreset, getProcessingModeInfo } from '../stores/settings-store';
 import { useSoundManager } from '../lib/sound-manager';
 import { useNotifications } from '../lib/notification-manager';
+import { PresetTooltip } from './PresetTooltip';
+import { PresetInfoModal } from './PresetInfoModal';
 import {
   IconSettings,
   IconVolume2,
@@ -26,6 +28,7 @@ import {
   IconX,
   IconChevronUp,
   IconChevronDown,
+  IconInfo,
 } from './icons';
 
 // =============================================================================
@@ -39,6 +42,7 @@ interface QuickSettingsPanelProps {
 export function QuickSettingsPanel({ className = '' }: QuickSettingsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   
   const {
     activePresetId,
@@ -100,23 +104,73 @@ export function QuickSettingsPanel({ className = '' }: QuickSettingsPanelProps) 
           <div className="p-4 space-y-4">
             {/* Preset Selector */}
             <div>
-              <label className="text-xs text-slate-400 uppercase tracking-wider mb-2 block">
-                Security Preset
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    onClick={() => setActivePreset(preset.id as PresetId)}
-                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
-                      activePresetId === preset.id
-                        ? 'bg-emerald-500 text-white'
-                        : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    {preset.name}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-slate-400 uppercase tracking-wider">
+                  Security Preset
+                </label>
+                <button
+                  onClick={() => setShowInfoModal(true)}
+                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                  aria-label="Learn about monitoring modes"
+                >
+                  <IconInfo size={14} />
+                  <span>What do these do?</span>
+                </button>
+              </div>
+              <div className="space-y-2">
+                {presets.map((preset) => {
+                  const presetId = preset.id as PresetId;
+                  const isSleep = isSleepPreset(presetId);
+                  const processingInfo = getProcessingModeInfo(preset.processingMode);
+                  const isActive = activePresetId === presetId;
+
+                  return (
+                    <PresetTooltip key={preset.id} presetId={presetId} position="left">
+                      <button
+                        onClick={() => setActivePreset(presetId)}
+                        className={`w-full p-3 rounded-lg text-left transition-all ${
+                          isActive
+                            ? isSleep
+                              ? 'bg-purple-500/20 border border-purple-500/50 text-white'
+                              : 'bg-emerald-500/20 border border-emerald-500/50 text-white'
+                            : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{preset.name}</span>
+                          {isSleep && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider
+                                           bg-purple-500/30 text-purple-300 rounded">
+                              Sleep
+                            </span>
+                          )}
+                          {isActive && (
+                            <IconCheck size={14} className="ml-auto text-emerald-400" />
+                          )}
+                        </div>
+                        {/* Inline description */}
+                        <p className="text-[10px] text-slate-500 mt-1 line-clamp-1">
+                          {preset.description.split('.')[0]}
+                        </p>
+                        {/* Stats row */}
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {preset.useAbsoluteThreshold && (
+                            <span className="text-[9px] font-mono text-emerald-400/70">
+                              {preset.absolutePixelThreshold}px
+                            </span>
+                          )}
+                          <span className={`text-[9px] uppercase ${
+                            processingInfo.color === 'green' ? 'text-emerald-400/70' :
+                            processingInfo.color === 'amber' ? 'text-amber-400/70' :
+                            'text-blue-400/70'
+                          }`}>
+                            {processingInfo.label}
+                          </span>
+                        </div>
+                      </button>
+                    </PresetTooltip>
+                  );
+                })}
               </div>
             </div>
 
@@ -246,7 +300,7 @@ export function QuickSettingsPanel({ className = '' }: QuickSettingsPanelProps) 
             {!notifications.isGranted && (
               <button
                 onClick={notifications.requestPermission}
-                className="w-full py-2 px-4 bg-blue-500/20 text-blue-400 rounded-lg text-sm 
+                className="w-full py-2 px-4 bg-blue-500/20 text-blue-400 rounded-lg text-sm
                            flex items-center justify-center gap-2 hover:bg-blue-500/30 transition-colors"
               >
                 <IconBell size={16} />
@@ -256,6 +310,12 @@ export function QuickSettingsPanel({ className = '' }: QuickSettingsPanelProps) 
           </div>
         </div>
       )}
+
+      {/* Preset Info Modal */}
+      <PresetInfoModal
+        isOpen={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+      />
     </div>
   );
 }

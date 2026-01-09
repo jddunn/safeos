@@ -430,9 +430,9 @@ export function MatchGallery({ subjectId, onClose }: MatchGalleryProps) {
                         setSelectedFrame(frame);
                       }}
                       className="p-2 bg-white/20 rounded-full hover:bg-white/30 transition-colors"
-                      title="View"
+                      aria-label="View match details"
                     >
-                      <IconExpand size={16} className="text-white" />
+                      <IconExpand size={16} className="text-white" aria-hidden="true" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -440,9 +440,9 @@ export function MatchGallery({ subjectId, onClose }: MatchGalleryProps) {
                         handleAcknowledge(frame.id);
                       }}
                       className="p-2 bg-emerald-500/50 rounded-full hover:bg-emerald-500/70 transition-colors"
-                      title="Acknowledge"
+                      aria-label="Acknowledge match"
                     >
-                      <IconCheck size={16} className="text-white" />
+                      <IconCheck size={16} className="text-white" aria-hidden="true" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -450,9 +450,9 @@ export function MatchGallery({ subjectId, onClose }: MatchGalleryProps) {
                         handleDelete(frame.id);
                       }}
                       className="p-2 bg-red-500/50 rounded-full hover:bg-red-500/70 transition-colors"
-                      title="Delete"
+                      aria-label="Delete match"
                     >
-                      <IconTrash size={16} className="text-white" />
+                      <IconTrash size={16} className="text-white" aria-hidden="true" />
                     </button>
                   </div>
                 </div>

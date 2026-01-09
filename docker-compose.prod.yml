@@ -1,0 +1,190 @@
+# SafeOS Guardian - Production Docker Compose for Linode
+#
+# Optimized for Linode deployment with:
+# - Caddy reverse proxy (automatic HTTPS)
+# - Ollama for local AI inference
+# - SQLite for data persistence
+# - Optional Redis for scaling
+#
+# Recommended Linode Specs:
+# - Linode 8GB ($48/mo) - Good for Moondream/small models
+# - Linode 16GB ($96/mo) - Better for LLaVA 7B
+#
+# Deploy: docker compose -f docker-compose.prod.yml up -d
+# Logs:   docker compose -f docker-compose.prod.yml logs -f
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Backend API Server
+  # =============================================================================
+  api:
+    build:
+      context: .
+      target: backend
+    container_name: safeos-api
+    restart: unless-stopped
+    expose:
+      - "3001"
+    environment:
+      - NODE_ENV=production
+      - SAFEOS_PORT=3001
+      - SAFEOS_DB_PATH=/app/db_data/safeos.sqlite3
+      - OLLAMA_HOST=http://ollama:11434
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Twilio SMS Alerts
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+      # Telegram Alerts
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      # Web Push Notifications (generate with: npx web-push generate-vapid-keys)
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_EMAIL=${VAPID_EMAIL:-}
+      # CORS - GitHub Pages origin
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://safeos.sh}
+    volumes:
+      - safeos-data:/app/db_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - safeos-network
+    depends_on:
+      ollama:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================================================================
+  # Ollama - Local AI Inference
+  # =============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: safeos-ollama
+    restart: unless-stopped
+    expose:
+      - "11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - safeos-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================================================================
+  # Caddy - Reverse Proxy with Automatic HTTPS
+  # =============================================================================
+  caddy:
+    image: caddy:2-alpine
+    container_name: safeos-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - safeos-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================================================================
+  # Redis (Optional - for session storage and rate limiting)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: safeos-redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - safeos-network
+    profiles:
+      - with-redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================================================================
+  # Watchtower - Automatic Container Updates (Optional)
+  # =============================================================================
+  watchtower:
+    image: containrrr/watchtower
+    container_name: safeos-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --cleanup --schedule "0 4 * * *" safeos-api safeos-ollama
+    profiles:
+      - with-watchtower
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  safeos-data:
+    driver: local
+  ollama-models:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  safeos-network:
+    driver: bridge

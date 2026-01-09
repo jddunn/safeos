@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SignalingServer } from '../../src/lib/webrtc/signaling.js';
+import { SignalingServer, createSignalingServer } from '../../src/lib/webrtc/signaling.js';
 
 // Mock WebSocket
 class MockWebSocket {
-  readyState = 1;
+  readyState = 1; // OPEN
   onmessage: ((event: any) => void) | null = null;
   onerror: ((event: any) => void) | null = null;
   onclose: (() => void) | null = null;
@@ -28,7 +28,7 @@ describe('SignalingServer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    server = new SignalingServer();
+    server = createSignalingServer();
   });
 
   // ===========================================================================
@@ -39,9 +39,19 @@ describe('SignalingServer', () => {
     it('should register new peer connection', () => {
       const mockWs = new MockWebSocket();
 
-      server.handleConnection('peer-1', mockWs as any);
+      const peerId = server.handleConnection(mockWs as any, 'peer-1');
 
-      expect(server.getPeerCount()).toBe(1);
+      expect(peerId).toBe('peer-1');
+      const stats = server.getStats();
+      expect(stats.activePeers).toBe(1);
+    });
+
+    it('should generate peer ID when not provided', () => {
+      const mockWs = new MockWebSocket();
+
+      const peerId = server.handleConnection(mockWs as any);
+
+      expect(peerId).toMatch(/^peer-\d+-/);
     });
 
     it('should track multiple peers', () => {
@@ -49,190 +59,259 @@ describe('SignalingServer', () => {
       const ws2 = new MockWebSocket();
       const ws3 = new MockWebSocket();
 
-      server.handleConnection('peer-1', ws1 as any);
-      server.handleConnection('peer-2', ws2 as any);
-      server.handleConnection('peer-3', ws3 as any);
+      server.handleConnection(ws1 as any, 'peer-1');
+      server.handleConnection(ws2 as any, 'peer-2');
+      server.handleConnection(ws3 as any, 'peer-3');
 
-      expect(server.getPeerCount()).toBe(3);
+      const stats = server.getStats();
+      expect(stats.activePeers).toBe(3);
+      expect(stats.totalConnections).toBe(3);
     });
 
     it('should remove peer on disconnect', () => {
       const mockWs = new MockWebSocket();
 
-      server.handleConnection('peer-1', mockWs as any);
-      server.handleDisconnect('peer-1');
+      server.handleConnection(mockWs as any, 'peer-1');
+      server.handleDisconnection(mockWs as any);
 
-      expect(server.getPeerCount()).toBe(0);
+      const stats = server.getStats();
+      expect(stats.activePeers).toBe(0);
     });
   });
 
   // ===========================================================================
-  // Offer/Answer Tests
-  // ===========================================================================
-
-  describe('offer handling', () => {
-    it('should relay offer to target peer', () => {
-      const sender = new MockWebSocket();
-      const receiver = new MockWebSocket();
-
-      server.handleConnection('sender', sender as any);
-      server.handleConnection('receiver', receiver as any);
-
-      const offer = {
-        type: 'offer',
-        from: 'sender',
-        to: 'receiver',
-        sdp: 'v=0\r\no=- 12345 2 IN IP4 127.0.0.1\r\n...',
-      };
-
-      server.handleMessage('sender', offer);
-
-      expect(receiver.send).toHaveBeenCalledWith(
-        expect.stringContaining('offer')
-      );
-    });
-
-    it('should not relay if target peer not found', () => {
-      const sender = new MockWebSocket();
-
-      server.handleConnection('sender', sender as any);
-
-      const offer = {
-        type: 'offer',
-        from: 'sender',
-        to: 'non-existent',
-        sdp: 'v=0\r\n...',
-      };
-
-      // Should not throw
-      expect(() => server.handleMessage('sender', offer)).not.toThrow();
-    });
-  });
-
-  describe('answer handling', () => {
-    it('should relay answer to target peer', () => {
-      const sender = new MockWebSocket();
-      const receiver = new MockWebSocket();
-
-      server.handleConnection('sender', sender as any);
-      server.handleConnection('receiver', receiver as any);
-
-      const answer = {
-        type: 'answer',
-        from: 'receiver',
-        to: 'sender',
-        sdp: 'v=0\r\no=- 67890 2 IN IP4 127.0.0.1\r\n...',
-      };
-
-      server.handleMessage('receiver', answer);
-
-      expect(sender.send).toHaveBeenCalledWith(
-        expect.stringContaining('answer')
-      );
-    });
-  });
-
-  // ===========================================================================
-  // ICE Candidate Tests
-  // ===========================================================================
-
-  describe('ICE candidate handling', () => {
-    it('should relay ICE candidates to target peer', () => {
-      const peer1 = new MockWebSocket();
-      const peer2 = new MockWebSocket();
-
-      server.handleConnection('peer-1', peer1 as any);
-      server.handleConnection('peer-2', peer2 as any);
-
-      const candidate = {
-        type: 'ice-candidate',
-        from: 'peer-1',
-        to: 'peer-2',
-        candidate: {
-          candidate: 'candidate:123 1 udp 123456 192.168.1.1 12345 typ host',
-          sdpMid: '0',
-          sdpMLineIndex: 0,
-        },
-      };
-
-      server.handleMessage('peer-1', candidate);
-
-      expect(peer2.send).toHaveBeenCalledWith(
-        expect.stringContaining('ice-candidate')
-      );
-    });
-  });
-
-  // ===========================================================================
-  // Room Tests
+  // Room Join/Leave Tests
   // ===========================================================================
 
   describe('room management', () => {
-    it('should create room for stream', () => {
-      const roomId = server.createRoom('stream-123');
+    it('should allow peer to join room', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
 
-      expect(roomId).toBeDefined();
-      expect(server.roomExists(roomId)).toBe(true);
+      server.joinRoom('peer-1', 'room-123', true);
+
+      const info = server.getRoomInfo('room-123');
+      expect(info.exists).toBe(true);
+      expect(info.viewerCount).toBe(1);
     });
 
-    it('should allow peers to join room', () => {
-      const roomId = server.createRoom('stream-123');
-      const peer1 = new MockWebSocket();
-      const peer2 = new MockWebSocket();
+    it('should create room on first join', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
 
-      server.handleConnection('peer-1', peer1 as any);
-      server.handleConnection('peer-2', peer2 as any);
+      // Room doesn't exist yet
+      let info = server.getRoomInfo('room-new');
+      expect(info.exists).toBe(false);
 
-      server.joinRoom('peer-1', roomId);
-      server.joinRoom('peer-2', roomId);
+      // Join creates the room
+      server.joinRoom('peer-1', 'room-new', true);
 
-      expect(server.getRoomPeers(roomId)).toHaveLength(2);
+      info = server.getRoomInfo('room-new');
+      expect(info.exists).toBe(true);
     });
 
-    it('should broadcast to all peers in room', () => {
-      const roomId = server.createRoom('stream-123');
-      const peer1 = new MockWebSocket();
-      const peer2 = new MockWebSocket();
-      const peer3 = new MockWebSocket();
+    it('should track broadcaster vs viewer', () => {
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
 
-      server.handleConnection('peer-1', peer1 as any);
-      server.handleConnection('peer-2', peer2 as any);
-      server.handleConnection('peer-3', peer3 as any);
+      server.handleConnection(ws1 as any, 'broadcaster');
+      server.handleConnection(ws2 as any, 'viewer');
 
-      server.joinRoom('peer-1', roomId);
-      server.joinRoom('peer-2', roomId);
-      // peer-3 not in room
+      server.joinRoom('broadcaster', 'room-123', false); // isViewer = false
+      server.joinRoom('viewer', 'room-123', true); // isViewer = true
 
-      server.broadcastToRoom(roomId, { type: 'test', data: 'hello' }, 'peer-1');
-
-      expect(peer2.send).toHaveBeenCalled();
-      expect(peer3.send).not.toHaveBeenCalled();
+      const info = server.getRoomInfo('room-123');
+      expect(info.hasBroadcaster).toBe(true);
+      expect(info.viewerCount).toBe(1);
     });
 
-    it('should remove peer from room on leave', () => {
-      const roomId = server.createRoom('stream-123');
-      const peer1 = new MockWebSocket();
+    it('should allow peer to leave room', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
+      server.joinRoom('peer-1', 'room-123', true);
 
-      server.handleConnection('peer-1', peer1 as any);
-      server.joinRoom('peer-1', roomId);
+      server.leaveRoom('peer-1');
 
-      expect(server.getRoomPeers(roomId)).toHaveLength(1);
-
-      server.leaveRoom('peer-1', roomId);
-
-      expect(server.getRoomPeers(roomId)).toHaveLength(0);
+      const info = server.getRoomInfo('room-123');
+      expect(info.viewerCount).toBe(0);
     });
 
     it('should clean up room when last peer leaves', () => {
-      const roomId = server.createRoom('stream-123');
-      const peer1 = new MockWebSocket();
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
+      server.joinRoom('peer-1', 'room-123', true);
 
-      server.handleConnection('peer-1', peer1 as any);
-      server.joinRoom('peer-1', roomId);
-      server.leaveRoom('peer-1', roomId);
+      server.leaveRoom('peer-1');
 
-      // Room should be cleaned up
-      expect(server.roomExists(roomId)).toBe(false);
+      const info = server.getRoomInfo('room-123');
+      expect(info.exists).toBe(false);
+    });
+
+    it('should notify other peers when someone joins', () => {
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+
+      server.handleConnection(ws1 as any, 'peer-1');
+      server.handleConnection(ws2 as any, 'peer-2');
+
+      server.joinRoom('peer-1', 'room-123', false); // broadcaster
+      server.joinRoom('peer-2', 'room-123', true); // viewer joins
+
+      // peer-1 should be notified about peer-2 joining
+      expect(ws1.send).toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // Message Handling Tests
+  // ===========================================================================
+
+  describe('message handling', () => {
+    it('should handle join-room message', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
+
+      server.handleMessage(mockWs as any, {
+        type: 'join-room',
+        roomId: 'room-123',
+        payload: { isViewer: true },
+      });
+
+      const info = server.getRoomInfo('room-123');
+      expect(info.exists).toBe(true);
+      expect(info.viewerCount).toBe(1);
+    });
+
+    it('should handle leave-room message', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
+      server.joinRoom('peer-1', 'room-123', true);
+
+      server.handleMessage(mockWs as any, { type: 'leave-room' });
+
+      const info = server.getRoomInfo('room-123');
+      expect(info.exists).toBe(false);
+    });
+
+    it('should relay offer to target peer', () => {
+      const senderWs = new MockWebSocket();
+      const receiverWs = new MockWebSocket();
+
+      server.handleConnection(senderWs as any, 'sender');
+      server.handleConnection(receiverWs as any, 'receiver');
+
+      // Both must be in the same room for relay to work
+      server.joinRoom('sender', 'room-123', false);
+      server.joinRoom('receiver', 'room-123', true);
+
+      server.handleMessage(senderWs as any, {
+        type: 'offer',
+        targetPeerId: 'receiver',
+        payload: { sdp: 'v=0...' },
+      });
+
+      expect(receiverWs.send).toHaveBeenCalled();
+      const stats = server.getStats();
+      expect(stats.messagesRelayed).toBeGreaterThan(0);
+    });
+
+    it('should relay answer to target peer', () => {
+      const senderWs = new MockWebSocket();
+      const receiverWs = new MockWebSocket();
+
+      server.handleConnection(senderWs as any, 'sender');
+      server.handleConnection(receiverWs as any, 'receiver');
+
+      server.joinRoom('sender', 'room-123', false);
+      server.joinRoom('receiver', 'room-123', true);
+
+      server.handleMessage(receiverWs as any, {
+        type: 'answer',
+        targetPeerId: 'sender',
+        payload: { sdp: 'v=0...' },
+      });
+
+      expect(senderWs.send).toHaveBeenCalled();
+    });
+
+    it('should relay ICE candidates', () => {
+      const senderWs = new MockWebSocket();
+      const receiverWs = new MockWebSocket();
+
+      server.handleConnection(senderWs as any, 'sender');
+      server.handleConnection(receiverWs as any, 'receiver');
+
+      server.joinRoom('sender', 'room-123', false);
+      server.joinRoom('receiver', 'room-123', true);
+
+      server.handleMessage(senderWs as any, {
+        type: 'ice-candidate',
+        targetPeerId: 'receiver',
+        payload: { candidate: 'candidate:...' },
+      });
+
+      expect(receiverWs.send).toHaveBeenCalled();
+    });
+
+    it('should handle room-info request', () => {
+      const mockWs = new MockWebSocket();
+      server.handleConnection(mockWs as any, 'peer-1');
+      server.joinRoom('peer-1', 'room-123', true);
+
+      server.handleMessage(mockWs as any, { type: 'room-info' });
+
+      expect(mockWs.send).toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // Stats Tests
+  // ===========================================================================
+
+  describe('stats tracking', () => {
+    it('should track total connections', () => {
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+
+      server.handleConnection(ws1 as any, 'peer-1');
+      server.handleConnection(ws2 as any, 'peer-2');
+
+      const stats = server.getStats();
+      expect(stats.totalConnections).toBe(2);
+    });
+
+    it('should track active rooms', () => {
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+
+      server.handleConnection(ws1 as any, 'peer-1');
+      server.handleConnection(ws2 as any, 'peer-2');
+
+      server.joinRoom('peer-1', 'room-1', true);
+      server.joinRoom('peer-2', 'room-2', true);
+
+      const stats = server.getStats();
+      expect(stats.activeRooms).toBe(2);
+    });
+
+    it('should track messages relayed', () => {
+      const ws1 = new MockWebSocket();
+      const ws2 = new MockWebSocket();
+
+      server.handleConnection(ws1 as any, 'peer-1');
+      server.handleConnection(ws2 as any, 'peer-2');
+
+      server.joinRoom('peer-1', 'room-123', false);
+      server.joinRoom('peer-2', 'room-123', true);
+
+      server.handleMessage(ws1 as any, {
+        type: 'offer',
+        targetPeerId: 'peer-2',
+        payload: {},
+      });
+
+      const stats = server.getStats();
+      expect(stats.messagesRelayed).toBe(1);
     });
   });
 
@@ -241,89 +320,28 @@ describe('SignalingServer', () => {
   // ===========================================================================
 
   describe('error handling', () => {
-    it('should handle malformed messages gracefully', () => {
-      const peer = new MockWebSocket();
-      server.handleConnection('peer-1', peer as any);
+    it('should handle messages from unknown socket gracefully', () => {
+      const unknownWs = new MockWebSocket();
 
       // Should not throw
-      expect(() => server.handleMessage('peer-1', { invalid: 'message' })).not.toThrow();
+      expect(() => server.handleMessage(unknownWs as any, { type: 'offer' })).not.toThrow();
     });
 
-    it('should handle connection errors', () => {
-      const peer = new MockWebSocket();
-      server.handleConnection('peer-1', peer as any);
+    it('should handle disconnect from unknown socket gracefully', () => {
+      const unknownWs = new MockWebSocket();
 
-      // Simulate error
-      expect(() => server.handleError('peer-1', new Error('Connection lost'))).not.toThrow();
-    });
-  });
-
-  // ===========================================================================
-  // Metrics Tests
-  // ===========================================================================
-
-  describe('metrics', () => {
-    it('should track total connections', () => {
-      const ws1 = new MockWebSocket();
-      const ws2 = new MockWebSocket();
-
-      server.handleConnection('peer-1', ws1 as any);
-      server.handleConnection('peer-2', ws2 as any);
-
-      const metrics = server.getMetrics();
-
-      expect(metrics.totalConnections).toBe(2);
+      // Should not throw
+      expect(() => server.handleDisconnection(unknownWs as any)).not.toThrow();
     });
 
-    it('should track message counts', () => {
-      const peer1 = new MockWebSocket();
-      const peer2 = new MockWebSocket();
+    it('should handle join for non-existent peer gracefully', () => {
+      // Should not throw
+      expect(() => server.joinRoom('non-existent', 'room-123', true)).not.toThrow();
+    });
 
-      server.handleConnection('peer-1', peer1 as any);
-      server.handleConnection('peer-2', peer2 as any);
-
-      server.handleMessage('peer-1', { type: 'offer', to: 'peer-2', sdp: '...' });
-      server.handleMessage('peer-2', { type: 'answer', to: 'peer-1', sdp: '...' });
-
-      const metrics = server.getMetrics();
-
-      expect(metrics.messagesRelayed).toBe(2);
+    it('should handle leave for non-existent peer gracefully', () => {
+      // Should not throw
+      expect(() => server.leaveRoom('non-existent')).not.toThrow();
     });
   });
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

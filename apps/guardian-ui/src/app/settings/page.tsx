@@ -78,6 +78,24 @@ export default function SettingsPage() {
       ),
     },
     {
+      id: 'ai-models',
+      title: 'AI Models',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'detection-zones',
+      title: 'Detection Zones',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+      ),
+    },
+    {
       id: 'notifications',
       title: 'Notifications',
       icon: (
@@ -92,6 +110,15 @@ export default function SettingsPage() {
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      ),
+    },
+    {
+      id: 'escalation',
+      title: 'Escalation',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
         </svg>
       ),
     },
@@ -159,8 +186,8 @@ export default function SettingsPage() {
       <header className="p-4 sm:p-6 border-b border-slate-700/50">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors" aria-label="Go back to dashboard">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
@@ -208,19 +235,36 @@ export default function SettingsPage() {
             <ul className="space-y-1">
               {sections.map((section) => (
                 <li key={section.id}>
-                  <button
-                    onClick={() => setActiveSection(section.id)}
-                    className={`
-                      w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                      ${activeSection === section.id
-                        ? 'bg-slate-700 text-white'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  {['ai-models', 'detection-zones', 'escalation'].includes(section.id) ? (
+                    <Link
+                      href={
+                        section.id === 'ai-models' ? '/settings/models' :
+                          section.id === 'detection-zones' ? '/settings/zones' :
+                            '/settings/escalation'
                       }
-                    `}
-                  >
-                    {section.icon}
-                    <span>{section.title}</span>
-                  </button>
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-slate-400 hover:text-white hover:bg-slate-800"
+                    >
+                      {section.icon}
+                      <span>{section.title}</span>
+                      <svg className="w-4 h-4 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={() => setActiveSection(section.id)}
+                      className={`
+                        w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                        ${activeSection === section.id
+                          ? 'bg-slate-700 text-white'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }
+                      `}
+                    >
+                      {section.icon}
+                      <span>{section.title}</span>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

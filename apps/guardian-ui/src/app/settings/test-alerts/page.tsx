@@ -19,10 +19,10 @@ import { useMonitoringStore } from '../../../stores/monitoring-store';
 import { useSettingsStore } from '../../../stores/settings-store';
 import { useSoundManager, SoundType } from '../../../lib/sound-manager';
 import { useNotifications } from '../../../lib/notification-manager';
-import { 
-  getPixelDetectionEngine, 
+import {
+  getPixelDetectionEngine,
   PixelDetectionResult,
-  resetPixelDetectionEngine 
+  resetPixelDetectionEngine
 } from '../../../lib/pixel-detection';
 import {
   IconChevronLeft,
@@ -49,16 +49,16 @@ export default function TestAlertsPage() {
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [pixelTestResult, setPixelTestResult] = useState<PixelDetectionResult | null>(null);
   const [showEmergencyTest, setShowEmergencyTest] = useState(false);
-  
+
   // Stores and hooks
   const addAlert = useMonitoringStore((state) => state.addAlert);
   const clearAlerts = useMonitoringStore((state) => state.clearAlerts);
   const alerts = useMonitoringStore((state) => state.alerts);
   const { globalSettings, emergencyModeActive, activateEmergencyMode, deactivateEmergencyMode } = useSettingsStore();
-  
+
   const soundManager = useSoundManager();
   const notifications = useNotifications();
-  
+
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -155,7 +155,7 @@ export default function TestAlertsPage() {
     try {
       const alert = createTestAlert(severity);
       addAlert(alert);
-      
+
       return {
         name: `Alert: ${severity}`,
         status: 'success',
@@ -180,7 +180,7 @@ export default function TestAlertsPage() {
       canvas.width = 320;
       canvas.height = 240;
       const ctx = canvas.getContext('2d');
-      
+
       if (!ctx) {
         throw new Error('Canvas context not available');
       }
@@ -298,8 +298,8 @@ export default function TestAlertsPage() {
       <header className="p-4 sm:p-6 border-b border-slate-700/50">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/settings" className="text-slate-400 hover:text-white transition-colors">
-              <IconChevronLeft size={20} />
+            <Link href="/settings" className="text-slate-400 hover:text-white transition-colors" aria-label="Go back to settings">
+              <IconChevronLeft size={20} aria-hidden="true" />
             </Link>
             <h1 className="text-xl font-bold text-white">Alert System Testing</h1>
           </div>
@@ -360,20 +360,59 @@ export default function TestAlertsPage() {
           />
         </div>
 
-        {/* Individual Sound Tests */}
+        {/* Enhanced Sound Tests */}
         <section className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Sound Tests</h2>
+
+          {/* Volume Preview Control */}
+          <div className="mb-6 p-4 bg-slate-900/50 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-slate-300">
+                Preview Volume: {globalSettings.alertVolume}%
+              </label>
+              <span className="text-xs text-slate-500">
+                Current setting from preferences
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <IconVolume2 size={18} className="text-slate-400" />
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={globalSettings.alertVolume}
+                onChange={(e) => {
+                  // Preview volume (doesn't save)
+                  soundManager.updateVolume(Number(e.target.value) / 100);
+                }}
+                className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+              />
+              <span className="text-sm text-white font-mono w-12 text-right">
+                {globalSettings.alertVolume}%
+              </span>
+            </div>
+          </div>
+
+          {/* Sound Type Buttons with Latency */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {(['notification', 'alert', 'warning', 'alarm', 'emergency'] as SoundType[]).map((type) => (
-              <button
+              <SoundTestButton
                 key={type}
-                onClick={() => soundManager.test(type)}
-                className="p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors group"
-              >
-                <IconPlay size={18} className="mx-auto mb-2 text-emerald-500 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-white capitalize block text-center">{type}</span>
-              </button>
+                type={type}
+                onPlay={() => {
+                  const start = performance.now();
+                  soundManager.test(type);
+                  return start;
+                }}
+              />
             ))}
+          </div>
+
+          {/* Latency Info */}
+          <div className="mt-4 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+            <p className="text-xs text-blue-300">
+              <strong>Audio Latency:</strong> Click each sound to test. Low latency (&lt;50ms) is important for emergency alerts to be heard immediately.
+            </p>
           </div>
         </section>
 
@@ -388,7 +427,7 @@ export default function TestAlertsPage() {
               Clear All
             </button>
           </div>
-          
+
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
             {(['info', 'low', 'medium', 'high', 'critical'] as Alert['severity'][]).map((severity) => (
               <button
@@ -427,7 +466,7 @@ export default function TestAlertsPage() {
         {/* Pixel Detection Test */}
         <section className="bg-slate-800/50 rounded-xl border border-slate-700/50 p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Pixel Detection Test</h2>
-          
+
           <div className="flex items-start gap-6">
             <div className="flex-1">
               <p className="text-sm text-slate-400 mb-4">
@@ -441,7 +480,7 @@ export default function TestAlertsPage() {
                 Run Pixel Detection Test
               </button>
             </div>
-            
+
             {pixelTestResult && (
               <div className="bg-slate-900/50 rounded-lg p-4 min-w-[200px]">
                 <h3 className="text-sm font-medium text-white mb-2">Results</h3>
@@ -482,18 +521,17 @@ export default function TestAlertsPage() {
                 Clear
               </button>
             </div>
-            
+
             <div className="space-y-2">
               {testResults.map((result, idx) => (
                 <div
                   key={idx}
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    result.status === 'success'
-                      ? 'bg-emerald-500/10 border border-emerald-500/30'
-                      : result.status === 'warning'
-                        ? 'bg-yellow-500/10 border border-yellow-500/30'
-                        : 'bg-red-500/10 border border-red-500/30'
-                  }`}
+                  className={`flex items-center justify-between p-3 rounded-lg ${result.status === 'success'
+                    ? 'bg-emerald-500/10 border border-emerald-500/30'
+                    : result.status === 'warning'
+                      ? 'bg-yellow-500/10 border border-yellow-500/30'
+                      : 'bg-red-500/10 border border-red-500/30'
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     {result.status === 'success' ? (
@@ -545,14 +583,14 @@ export default function TestAlertsPage() {
             <SettingDisplay label="Alert Volume" value={`${globalSettings.alertVolume}%`} />
             <SettingDisplay label="Analysis Interval" value={`${globalSettings.analysisInterval}s`} />
             <SettingDisplay label="Alert Delay" value={`${globalSettings.alertDelay}s`} />
-            <SettingDisplay 
-              label="Emergency Mode" 
-              value={globalSettings.emergencyMode ? 'Enabled' : 'Disabled'} 
+            <SettingDisplay
+              label="Emergency Mode"
+              value={globalSettings.emergencyMode ? 'Enabled' : 'Disabled'}
               highlight={globalSettings.emergencyMode}
             />
-            <SettingDisplay 
-              label="Pixel Detection" 
-              value={globalSettings.pixelDetectionEnabled ? 'Enabled' : 'Disabled'} 
+            <SettingDisplay
+              label="Pixel Detection"
+              value={globalSettings.pixelDetectionEnabled ? 'Enabled' : 'Disabled'}
               highlight={globalSettings.pixelDetectionEnabled}
             />
           </div>
@@ -596,6 +634,48 @@ function TestButton({ icon, label, onClick, variant = 'default' }: TestButtonPro
     >
       {icon}
       <span className="text-sm font-medium">{label}</span>
+    </button>
+  );
+}
+
+interface SoundTestButtonProps {
+  type: SoundType;
+  onPlay: () => number;
+}
+
+function SoundTestButton({ type, onPlay }: SoundTestButtonProps) {
+  const [lastLatency, setLastLatency] = React.useState<number | null>(null);
+  const [isPlaying, setIsPlaying] = React.useState(false);
+
+  const handleClick = () => {
+    const start = onPlay();
+    setIsPlaying(true);
+
+    // Measure approximate latency (time until audio API call completes)
+    requestAnimationFrame(() => {
+      const latency = performance.now() - start;
+      setLastLatency(Math.round(latency));
+      setTimeout(() => setIsPlaying(false), 500);
+    });
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      className={`p-3 rounded-lg transition-all group ${isPlaying
+          ? 'bg-emerald-500/20 border border-emerald-500/30 scale-95'
+          : 'bg-slate-700/30 hover:bg-slate-700/50 border border-transparent'
+        }`}
+    >
+      <IconPlay size={18} className={`mx-auto mb-2 transition-transform ${isPlaying ? 'text-emerald-400 scale-110' : 'text-emerald-500 group-hover:scale-110'
+        }`} />
+      <span className="text-sm text-white capitalize block text-center">{type}</span>
+      {lastLatency !== null && (
+        <span className={`text-xs block text-center mt-1 ${lastLatency < 50 ? 'text-emerald-400' : lastLatency < 100 ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+          {lastLatency}ms
+        </span>
+      )}
     </button>
   );
 }

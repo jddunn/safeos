@@ -255,9 +255,9 @@ export default function LostFoundPage() {
                         <button
                           onClick={(e) => handleDeleteSubject(subject.id, e)}
                           className="p-2 text-[var(--color-steel-500)] hover:text-red-400 transition-colors"
-                          title="Delete"
+                          aria-label={`Delete ${subject.name}`}
                         >
-                          <IconTrash size={16} />
+                          <IconTrash size={16} aria-hidden="true" />
                         </button>
                       </div>
                     </div>

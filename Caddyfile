@@ -1,0 +1,66 @@
+# SafeOS Guardian - Caddy Reverse Proxy Configuration
+#
+# Provides automatic HTTPS with Let's Encrypt.
+# Replace 'safeos-api.yourdomain.com' with your actual domain.
+#
+# For local development without a domain, use:
+#   :443, :80 {
+#     reverse_proxy api:3001
+#   }
+
+# =============================================================================
+# API Server - Replace with your domain
+# =============================================================================
+{$SAFEOS_DOMAIN:safeos-api.yourdomain.com} {
+    # Reverse proxy to API container
+    reverse_proxy api:3001
+
+    # WebSocket support for real-time updates
+    @websocket {
+        header Upgrade websocket
+    }
+    reverse_proxy @websocket api:3001
+
+    # CORS headers for GitHub Pages frontend
+    header {
+        Access-Control-Allow-Origin {$CORS_ORIGIN:https://safeos.sh}
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        Access-Control-Allow-Credentials "true"
+        Access-Control-Max-Age "86400"
+    }
+
+    # Handle preflight requests
+    @options method OPTIONS
+    respond @options 204
+
+    # Security headers
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Gzip compression
+    encode gzip
+
+    # Logging
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 3
+            roll_keep_for 168h
+        }
+        format json
+    }
+}
+
+# =============================================================================
+# Health Check Endpoint (no TLS for internal checks)
+# =============================================================================
+:8080 {
+    respond /health 200
+    respond * 404
+}

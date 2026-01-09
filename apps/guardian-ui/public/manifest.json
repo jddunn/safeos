@@ -1,7 +1,7 @@
 {
   "name": "SafeOS Guardian",
   "short_name": "SafeOS",
-  "description": "Free AI monitoring for pets, babies & elderly - Part of SuperCloud's 10% for Humanity Initiative",
+  "description": "Free AI monitoring for pets, babies & elderly - By Frame",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",

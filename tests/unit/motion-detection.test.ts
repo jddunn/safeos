@@ -54,7 +54,9 @@ describe('Motion Detection', () => {
 
     it('should return higher score for more difference', () => {
       const frame1 = createMockImageData(100, 100, 50);
-      const frame2Small = createMockImageData(100, 100, 100);
+      // frame2Small: 60 - 50 = 10, which is < PIXEL_THRESHOLD of 30, so no motion
+      const frame2Small = createMockImageData(100, 100, 60);
+      // frame2Large: 200 - 50 = 150, which is > PIXEL_THRESHOLD of 30, so motion detected
       const frame2Large = createMockImageData(100, 100, 200);
 
       const scoreSmall = calculateMotionScore(frame1, frame2Small);

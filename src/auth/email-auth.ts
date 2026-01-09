@@ -206,7 +206,7 @@ export class EmailAuthService {
     }
 
     // TODO: Send verification email
-    console.log(`[EmailAuth] Verification token for ${email}: ${verificationToken}`);
+    // Token is stored in DB and should be sent via email
 
     return {
       success: true,
@@ -341,7 +341,7 @@ export class EmailAuthService {
     );
 
     // TODO: Send password reset email
-    console.log(`[EmailAuth] Password reset token for ${email}: ${resetToken}`);
+    // Token is stored in DB and should be sent via email
 
     return { success: true };
   }

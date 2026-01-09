@@ -158,8 +158,8 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-slate-400 hover:text-white transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <Link href="/" className="text-slate-400 hover:text-white transition-colors" aria-label="Go back to dashboard">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </Link>
@@ -856,18 +856,18 @@ function UsersTab() {
                         <button
                           onClick={() => handleUserAction(user.id, 'promote')}
                           className="px-2 py-1 text-xs bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30 transition-colors"
-                          title="Promote to Admin"
+                          aria-label="Promote to Admin"
                         >
-                          ↑
+                          <span aria-hidden="true">↑</span>
                         </button>
                       )}
                       {user.role === 'admin' && (
                         <button
                           onClick={() => handleUserAction(user.id, 'demote')}
                           className="px-2 py-1 text-xs bg-slate-500/20 text-slate-400 rounded hover:bg-slate-500/30 transition-colors"
-                          title="Demote to User"
+                          aria-label="Demote to User"
                         >
-                          ↓
+                          <span aria-hidden="true">↓</span>
                         </button>
                       )}
                     </div>

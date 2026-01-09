@@ -117,19 +117,37 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }
   };
 
+  // Handle escape key to close modal
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="login-modal-title"
+    >
       <div className="w-full max-w-md mx-4 bg-slate-800 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="p-6 border-b border-slate-700/50 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-white">Welcome to SafeOS</h2>
+          <h2 id="login-modal-title" className="text-2xl font-bold text-white">Welcome to SafeOS</h2>
           <p className="text-sm text-slate-400 mt-1">Free AI monitoring for pets, babies & elderly</p>
         </div>
 
@@ -147,7 +165,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 className="w-full flex items-center gap-4 p-4 bg-slate-700/50 hover:bg-slate-700 rounded-xl border border-slate-600 transition-colors"
               >
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
@@ -155,7 +173,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <h3 className="text-white font-medium">Continue as Guest</h3>
                   <p className="text-sm text-slate-400">No account needed. Data stored locally.</p>
                 </div>
-                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -167,7 +185,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 className="w-full flex items-center gap-4 p-4 bg-slate-700/50 hover:bg-slate-700 rounded-xl border border-slate-600 transition-colors disabled:opacity-50"
               >
                 <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center">
-                  <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </div>
@@ -176,9 +194,9 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                   <p className="text-sm text-slate-400">Continue your previous session.</p>
                 </div>
                 {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-slate-500 border-t-white rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-slate-500 border-t-white rounded-full animate-spin" aria-label="Loading" />
                 ) : (
-                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 )}
@@ -197,31 +215,34 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <button
                 onClick={() => setView('main')}
                 className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+                aria-label="Go back to main menu"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
                 Back
               </button>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label htmlFor="display-name-input" className="block text-sm font-medium text-slate-300 mb-2">
                   Display Name (optional)
                 </label>
                 <input
+                  id="display-name-input"
                   type="text"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Enter a name..."
+                  aria-describedby="display-name-hint"
                   className="w-full px-4 py-3 bg-slate-900/50 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 />
-                <p className="text-xs text-slate-500 mt-1">
+                <p id="display-name-hint" className="text-xs text-slate-500 mt-1">
                   This will be shown in your profile.
                 </p>
               </div>
 
               {error && (
-                <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
+                <div role="alert" className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
                   {error}
                 </div>
               )}
@@ -229,11 +250,12 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
               <button
                 onClick={handleGuestContinue}
                 disabled={isLoading}
+                aria-busy={isLoading}
                 className="w-full py-3 px-4 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-medium rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
                     Creating session...
                   </span>
                 ) : (

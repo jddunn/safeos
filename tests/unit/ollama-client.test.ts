@@ -35,14 +35,14 @@ describe('OllamaClient', () => {
     it('should return true when Ollama is running', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ version: '0.1.0' }),
+        json: async () => ({ models: [] }),
       });
 
       const healthy = await client.isHealthy();
 
       expect(healthy).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:11434/api/version',
+        'http://localhost:11434/api/tags',
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });
@@ -64,6 +64,19 @@ describe('OllamaClient', () => {
       const healthy = await client.isHealthy();
 
       expect(healthy).toBe(false);
+    });
+
+    it('should cache health check results', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: [] }),
+      });
+
+      await client.isHealthy();
+      await client.isHealthy();
+
+      // Should only be called once due to caching
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -99,8 +112,8 @@ describe('OllamaClient', () => {
   describe('listModels', () => {
     it('should list available models', async () => {
       const mockModels = [
-        { name: 'moondream:latest', size: 1_000_000_000 },
-        { name: 'llava:7b', size: 4_000_000_000 },
+        { name: 'moondream:latest', size: 1_000_000_000, modified_at: '2024-01-01', digest: 'abc' },
+        { name: 'llava:7b', size: 4_000_000_000, modified_at: '2024-01-01', digest: 'def' },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -131,7 +144,7 @@ describe('OllamaClient', () => {
   describe('hasModel', () => {
     it('should return true if model exists', async () => {
       const mockModels = [
-        { name: 'moondream:latest', size: 1_000_000_000 },
+        { name: 'moondream:latest', size: 1_000_000_000, modified_at: '2024-01-01', digest: 'abc' },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -146,7 +159,7 @@ describe('OllamaClient', () => {
 
     it('should return false if model does not exist', async () => {
       const mockModels = [
-        { name: 'llava:7b', size: 4_000_000_000 },
+        { name: 'llava:7b', size: 4_000_000_000, modified_at: '2024-01-01', digest: 'abc' },
       ];
 
       mockFetch.mockResolvedValueOnce({
@@ -157,6 +170,23 @@ describe('OllamaClient', () => {
       const has = await client.hasModel('moondream');
 
       expect(has).toBe(false);
+    });
+
+    it('should cache model check results', async () => {
+      const mockModels = [
+        { name: 'moondream:latest', size: 1_000_000_000, modified_at: '2024-01-01', digest: 'abc' },
+      ];
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ models: mockModels }),
+      });
+
+      await client.hasModel('moondream');
+      await client.hasModel('moondream');
+
+      // Should only fetch once due to caching
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -172,8 +202,6 @@ describe('OllamaClient', () => {
           response: 'This is a test response.',
           done: true,
           total_duration: 1000000000,
-          prompt_eval_count: 10,
-          eval_count: 20,
         }),
       });
 
@@ -182,8 +210,8 @@ describe('OllamaClient', () => {
         prompt: 'Hello, world!',
       });
 
-      expect(response.response).toBe('This is a test response.');
-      expect(response.done).toBe(true);
+      // generate() returns just the string response
+      expect(response).toBe('This is a test response.');
     });
 
     it('should include images in request for vision models', async () => {
@@ -247,6 +275,28 @@ describe('OllamaClient', () => {
 
       expect(result).toBe('The image shows a sleeping cat on a couch.');
     });
+
+    it('should strip data URL prefix from images', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          response: 'An image.',
+          done: true,
+        }),
+      });
+
+      const dataUrl = 'data:image/png;base64,iVBORw0KGgo...';
+
+      await client.analyzeImage(dataUrl, 'Describe');
+
+      // Should not include the data URL prefix in the request
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:11434/api/generate',
+        expect.objectContaining({
+          body: expect.not.stringContaining('data:image'),
+        })
+      );
+    });
   });
 
   // ===========================================================================
@@ -254,7 +304,7 @@ describe('OllamaClient', () => {
   // ===========================================================================
 
   describe('triage', () => {
-    it('should triage image and return concern level', async () => {
+    it('should return string response from triage model', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -265,87 +315,87 @@ describe('OllamaClient', () => {
 
       const base64Image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-      const result = await client.triage(base64Image, 'pet');
+      const result = await client.triage(base64Image, 'Check this pet.');
 
-      expect(result.needsDetailedAnalysis).toBe(false);
-      expect(result.quickAssessment).toContain('low');
+      // triage() returns string, not structured object
+      expect(result).toBe('CONCERN: low - Everything appears normal.');
     });
+  });
 
-    it('should flag high concern for detailed analysis', async () => {
+  // ===========================================================================
+  // Analysis Tests  
+  // ===========================================================================
+
+  describe('analyze', () => {
+    it('should use larger analysis model', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          response: 'CONCERN: high - Pet appears to be in distress.',
+          response: 'Detailed analysis...',
           done: true,
         }),
       });
 
       const base64Image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-      const result = await client.triage(base64Image, 'pet');
+      await client.analyze(base64Image, 'Analyze in detail.');
 
-      expect(result.needsDetailedAnalysis).toBe(true);
+      // Should use llava:7b model
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://localhost:11434/api/generate',
+        expect.objectContaining({
+          body: expect.stringContaining('llava:7b'),
+        })
+      );
     });
   });
 
   // ===========================================================================
-  // Metrics Tests
+  // Host Tests
   // ===========================================================================
 
-  describe('metrics', () => {
-    it('should track analysis count', async () => {
+  describe('getHost', () => {
+    it('should return configured host', () => {
+      expect(client.getHost()).toBe('http://localhost:11434');
+    });
+  });
+
+  // ===========================================================================
+  // Required Models Check
+  // ===========================================================================
+
+  describe('checkRequiredModels', () => {
+    it('should check for both triage and analysis models', async () => {
+      const mockModels = [
+        { name: 'moondream:latest', size: 1_000_000_000, modified_at: '2024-01-01', digest: 'abc' },
+        { name: 'llava:7b', size: 4_000_000_000, modified_at: '2024-01-01', digest: 'def' },
+      ];
+
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({
-          response: 'Test response',
-          done: true,
-        }),
+        json: async () => ({ models: mockModels }),
       });
 
-      const base64Image = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const result = await client.checkRequiredModels();
 
-      await client.analyzeImage(base64Image, 'Test');
-      await client.analyzeImage(base64Image, 'Test');
+      expect(result.triageModel).toBe(true);
+      expect(result.analysisModel).toBe(true);
+    });
 
-      const metrics = client.getMetrics();
+    it('should report missing models', async () => {
+      const mockModels = [
+        { name: 'llava:7b', size: 4_000_000_000, modified_at: '2024-01-01', digest: 'def' },
+      ];
 
-      expect(metrics.analysisCount).toBe(2);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ models: mockModels }),
+      });
+
+      const result = await client.checkRequiredModels();
+
+      expect(result.triageModel).toBe(false);
+      expect(result.analysisModel).toBe(true);
     });
   });
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

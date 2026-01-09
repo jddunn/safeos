@@ -213,14 +213,15 @@ export function AlertPanel({ alerts: propAlerts, onAcknowledge }: AlertPanelProp
         </h3>
         <button
           onClick={toggleMute}
+          aria-label={muted ? 'Unmute alerts' : 'Mute alerts'}
+          aria-pressed={muted}
           className={`p-2 rounded-lg transition-colors ${
             muted
               ? 'bg-red-500/20 text-red-400'
               : 'bg-slate-700/50 text-slate-400 hover:text-white'
           }`}
-          title={muted ? 'Unmute alerts' : 'Mute alerts'}
         >
-          {muted ? '🔇' : '🔊'}
+          <span aria-hidden="true">{muted ? '🔇' : '🔊'}</span>
         </button>
       </div>
 
@@ -338,12 +339,14 @@ function AcknowledgedSection({ alerts }: AcknowledgedSectionProps) {
     <div className="bg-slate-700/20">
       <button
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} ${alerts.length} acknowledged alert${alerts.length !== 1 ? 's' : ''}`}
         className="w-full p-3 flex items-center justify-between text-slate-400 hover:text-white transition-colors"
       >
         <span className="text-sm">
           {alerts.length} acknowledged alert{alerts.length !== 1 ? 's' : ''}
         </span>
-        <span>{expanded ? '▲' : '▼'}</span>
+        <span aria-hidden="true">{expanded ? '▲' : '▼'}</span>
       </button>
 
       {expanded && (

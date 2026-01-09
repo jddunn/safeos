@@ -1,0 +1,269 @@
+/**
+ * Status Banner Component
+ *
+ * Shows backend connection status and local-only mode indicator.
+ * Allows users to configure backend or dismiss the banner.
+ *
+ * @module components/StatusBanner
+ */
+
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useBackendStatus } from '@/contexts/BackendStatusContext';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+interface StatusBannerProps {
+  onConfigureClick?: () => void;
+  dismissible?: boolean;
+}
+
+// =============================================================================
+// Component
+// =============================================================================
+
+export function StatusBanner({ onConfigureClick, dismissible = true }: StatusBannerProps) {
+  const { status, isLocalOnly, isConnected, retry, config } = useBackendStatus();
+  const [isDismissed, setIsDismissed] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Restore dismissed state from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const dismissed = localStorage.getItem('safeos_status_banner_dismissed');
+    if (dismissed === 'true') {
+      setIsDismissed(true);
+    }
+  }, []);
+
+  // Show banner after mount to prevent hydration mismatch
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('safeos_status_banner_dismissed', 'true');
+    }
+  };
+
+  const handleConfigure = () => {
+    // Clear dismissed state when user wants to configure
+    setIsDismissed(false);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('safeos_status_banner_dismissed');
+    }
+    onConfigureClick?.();
+  };
+
+  // Don't show if fully connected or dismissed
+  if (!isVisible || isConnected || (isDismissed && isLocalOnly)) {
+    return null;
+  }
+
+  // Show error state
+  if (status.error && !isDismissed) {
+    return (
+      <div className="bg-red-500/10 border-b border-red-500/20 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {/* Error Icon */}
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+
+              {/* Message */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <span className="text-sm font-medium text-red-300">Connection Error</span>
+                <span className="text-xs text-red-300/70">{status.error}</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={retry}
+                className="px-3 py-1.5 text-xs font-medium text-red-300 hover:text-white bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors"
+              >
+                Retry
+              </button>
+              {dismissible && (
+                <button
+                  onClick={handleDismiss}
+                  className="p-1.5 text-red-400 hover:text-red-300 transition-colors"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show local-only mode banner
+  if (isLocalOnly && !isDismissed) {
+    const disabledCount = status.disabledFeatures.length;
+
+    return (
+      <div className="bg-amber-500/10 border-b border-amber-500/20 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              {/* Offline/Local Icon */}
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+
+              {/* Message */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                <span className="text-sm font-medium text-amber-300">Running in Local Mode</span>
+                <span className="text-xs text-amber-300/70">
+                  {config.configured
+                    ? `Cannot connect to backend. ${disabledCount} feature${disabledCount !== 1 ? 's' : ''} disabled.`
+                    : `${disabledCount} cloud feature${disabledCount !== 1 ? 's' : ''} unavailable. All detection works offline.`
+                  }
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              {onConfigureClick && (
+                <button
+                  onClick={handleConfigure}
+                  className="px-3 py-1.5 text-xs font-medium text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 rounded-lg transition-colors"
+                >
+                  Configure Backend
+                </button>
+              )}
+              {config.configured && (
+                <button
+                  onClick={retry}
+                  className="px-3 py-1.5 text-xs font-medium text-amber-300 hover:text-white bg-amber-500/20 hover:bg-amber-500/30 rounded-lg transition-colors"
+                >
+                  Retry
+                </button>
+              )}
+              {dismissible && (
+                <button
+                  onClick={handleDismiss}
+                  className="p-1.5 text-amber-400 hover:text-amber-300 transition-colors"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show connecting state
+  if (status.api === 'connecting') {
+    return (
+      <div className="bg-blue-500/10 border-b border-blue-500/20 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3">
+            {/* Spinner */}
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+            </div>
+
+            {/* Message */}
+            <span className="text-sm text-blue-300">Connecting to backend...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+// =============================================================================
+// Compact Status Indicator (for header/nav)
+// =============================================================================
+
+export function StatusIndicator() {
+  const { status, isLocalOnly, isConnected } = useBackendStatus();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    setIsVisible(true);
+  }, []);
+
+  if (!isVisible) return null;
+
+  // Connection status dot
+  const getStatusColor = () => {
+    if (isConnected) return 'bg-emerald-400';
+    if (status.api === 'connecting') return 'bg-blue-400 animate-pulse';
+    if (status.error) return 'bg-red-400';
+    if (isLocalOnly) return 'bg-amber-400';
+    return 'bg-slate-400';
+  };
+
+  const getStatusText = () => {
+    if (isConnected) return 'Connected';
+    if (status.api === 'connecting') return 'Connecting...';
+    if (status.error) return 'Error';
+    if (isLocalOnly) return 'Local Mode';
+    return 'Disconnected';
+  };
+
+  return (
+    <div className="flex items-center gap-2" title={getStatusText()}>
+      <span className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
+      <span className="text-xs text-slate-400 hidden sm:inline">{getStatusText()}</span>
+    </div>
+  );
+}
+
+// =============================================================================
+// Feature Disabled Badge
+// =============================================================================
+
+interface FeatureDisabledBadgeProps {
+  feature: string;
+  className?: string;
+}
+
+export function FeatureDisabledBadge({ feature, className = '' }: FeatureDisabledBadgeProps) {
+  const { isFeatureAvailable } = useBackendStatus();
+
+  if (isFeatureAvailable(feature)) {
+    return null;
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-amber-400 bg-amber-500/10 rounded-full ${className}`}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m-6.93 3a9 9 0 1113.86 0H3.07z" />
+      </svg>
+      Requires Backend
+    </span>
+  );
+}
+
+export default StatusBanner;

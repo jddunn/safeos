@@ -48,10 +48,10 @@ export default function SetupPage() {
   const currentIndex = STEPS.indexOf(currentStep);
   const progress = ((currentIndex + 1) / STEPS.length) * 100;
 
-  // Check if we can skip onboarding
+  // Check if we can skip onboarding - redirect to dashboard if already complete
   useEffect(() => {
     if (canSkipOnboarding(onboarding)) {
-      router.push('/');
+      router.push('/dashboard');
     }
   }, [onboarding, router]);
 
@@ -86,7 +86,7 @@ export default function SetupPage() {
 
   const completeSetup = () => {
     onboarding.setComplete(true);
-    router.push('/');
+    router.push('/dashboard');
   };
 
   return (

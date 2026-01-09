@@ -11,7 +11,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Dashboard } from '../components/Dashboard';
 import { useOnboardingStore, canSkipOnboarding } from '../stores/onboarding-store';
 import {
   IconShield,
@@ -117,6 +116,9 @@ function AnimatedShield() {
 // =============================================================================
 
 function LandingPage() {
+  const onboardingState = useOnboardingStore();
+  const isSetupComplete = canSkipOnboarding(onboardingState);
+
   return (
     <div className="bg-[var(--color-steel-950)]">
       {/* Hero Section */}
@@ -167,30 +169,62 @@ function LandingPage() {
             </div>
           </div>
 
-          {/* Big CTA Button */}
-          <Link
-            href="/setup"
-            className="group inline-flex items-center gap-4 px-10 py-5 
-                       bg-gradient-to-r from-emerald-600 to-emerald-500 
-                       hover:from-emerald-500 hover:to-emerald-400
-                       text-white text-xl font-semibold rounded-xl
-                       shadow-[0_0_40px_rgba(16,185,129,0.3)]
-                       hover:shadow-[0_0_60px_rgba(16,185,129,0.5)]
-                       transform hover:scale-[1.02] active:scale-[0.98]
-                       transition-all duration-200
-                       font-[family-name:var(--font-space-grotesk)]"
-          >
-            <IconShield size={28} />
-            <span>Start Setup</span>
-            <IconArrowRight 
-              size={24} 
-              className="transform group-hover:translate-x-1 transition-transform" 
-            />
-          </Link>
+          {/* CTA Buttons */}
+          {isSetupComplete ? (
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <Link
+                href="/dashboard"
+                className="group inline-flex items-center gap-4 px-10 py-5
+                           bg-gradient-to-r from-emerald-600 to-emerald-500
+                           hover:from-emerald-500 hover:to-emerald-400
+                           text-white text-xl font-semibold rounded-xl
+                           shadow-[0_0_40px_rgba(16,185,129,0.3)]
+                           hover:shadow-[0_0_60px_rgba(16,185,129,0.5)]
+                           transform hover:scale-[1.02] active:scale-[0.98]
+                           transition-all duration-200
+                           font-[family-name:var(--font-space-grotesk)]"
+              >
+                <IconShield size={28} />
+                <span>Go to Dashboard</span>
+                <IconArrowRight
+                  size={24}
+                  className="transform group-hover:translate-x-1 transition-transform"
+                />
+              </Link>
+              <Link
+                href="/setup"
+                className="inline-flex items-center gap-2 px-6 py-3
+                           text-slate-400 hover:text-emerald-400
+                           transition-colors text-sm"
+              >
+                <span>Redo Setup</span>
+              </Link>
+            </div>
+          ) : (
+            <Link
+              href="/setup"
+              className="group inline-flex items-center gap-4 px-10 py-5
+                         bg-gradient-to-r from-emerald-600 to-emerald-500
+                         hover:from-emerald-500 hover:to-emerald-400
+                         text-white text-xl font-semibold rounded-xl
+                         shadow-[0_0_40px_rgba(16,185,129,0.3)]
+                         hover:shadow-[0_0_60px_rgba(16,185,129,0.5)]
+                         transform hover:scale-[1.02] active:scale-[0.98]
+                         transition-all duration-200
+                         font-[family-name:var(--font-space-grotesk)]"
+            >
+              <IconShield size={28} />
+              <span>Start Setup</span>
+              <IconArrowRight
+                size={24}
+                className="transform group-hover:translate-x-1 transition-transform"
+              />
+            </Link>
+          )}
 
           {/* Sub-text */}
           <p className="mt-4 text-sm text-[var(--color-steel-500)]">
-            Takes less than 2 minutes · No account required
+            {isSetupComplete ? 'Your monitoring dashboard awaits' : 'Takes less than 2 minutes · No account required'}
           </p>
         </div>
 
@@ -293,7 +327,6 @@ function FeatureCard({ icon: Icon, title, description }: FeatureCardProps) {
 // =============================================================================
 
 export default function HomePage() {
-  const onboardingState = useOnboardingStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -309,11 +342,8 @@ export default function HomePage() {
     );
   }
 
-  // Show dashboard if onboarding complete, otherwise show landing
-  if (canSkipOnboarding(onboardingState)) {
-    return <Dashboard />;
-  }
-
+  // Always show landing page at /
+  // Dashboard is available at /dashboard
   return <LandingPage />;
 }
 

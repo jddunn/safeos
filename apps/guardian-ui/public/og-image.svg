@@ -52,10 +52,10 @@
     HUMANITARIAN AI MONITORING
   </text>
   
-  <!-- SuperCloud Attribution -->
-  <g transform="translate(1020, 560)">
+  <!-- Frame Attribution -->
+  <g transform="translate(1080, 560)">
     <text fill="#3A424D" font-family="Inter, system-ui, sans-serif" font-size="14">
-      Part of SuperCloud
+      By Frame
     </text>
   </g>
   

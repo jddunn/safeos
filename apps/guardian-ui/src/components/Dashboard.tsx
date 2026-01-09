@@ -589,9 +589,9 @@ function RecentAlertsPanel({ alerts }: RecentAlertsPanelProps) {
                 <button
                   onClick={(e) => handleDismiss(e, alert.id)}
                   className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--color-steel-700)] text-[var(--color-steel-500)] hover:text-white transition-all"
-                  title="Dismiss alert"
+                  aria-label="Dismiss alert"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                     <path d="M18 6L6 18M6 6l12 12" />
                   </svg>
                 </button>

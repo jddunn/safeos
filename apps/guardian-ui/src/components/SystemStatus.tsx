@@ -74,9 +74,11 @@ export function SystemStatus({ stats }: SystemStatusProps) {
           </h3>
           <button
             onClick={() => setExpanded(!expanded)}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Collapse system details' : 'Expand system details'}
             className="text-slate-400 hover:text-white transition-colors"
           >
-            {expanded ? '▲' : '▼'}
+            <span aria-hidden="true">{expanded ? '▲' : '▼'}</span>
           </button>
         </div>
       </div>
